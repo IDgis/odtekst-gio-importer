@@ -1,0 +1,17 @@
+*.log
+bin
+
+# Gradle
+.gradle
+build
+
+# IntelliJ
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Eclipse /JDT Language Server
+.classpath
+.project
+.settings
