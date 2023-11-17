@@ -60,6 +60,9 @@ public class GioImporter {
         // Haal regelingId op
         int regelingVersieId = getRegelingVersieId(regelingExpression);
         int regelingId = getRegelingId(regelingVersieId);
+        int eindverantwoordelijkeId = getEindverantwoordelijkeId(regelingVersieId);
+        int makerId = getMakerId(regelingVersieId);
+        String eindverantwoordelijke = getEindverantwoordelijke(eindverantwoordelijkeId);
 
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -86,7 +89,7 @@ public class GioImporter {
                 if (!geometryExists(id.getTextContent())) {
                     int geometrieId = insertGeometry(id.getTextContent(), naam.getTextContent(), getGml(gmlNode));
                     String geometryType = getGeometryType(geometrieId);
-                    locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId));
+                    locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke));
                 } else {
                     int geometrieId = getGeometrieId(id.getTextContent());
                     locatieIds.add(getLocatieId(geometrieId));
@@ -95,8 +98,7 @@ public class GioImporter {
 
             // Groep locatie
             String geometryType = getLocatieGeometryType(locatieIds.get(0));
-            String locatieGroepName = locatieIds.size() == 1 ? getLocatieName(locatieIds.get(0)) : gioName;
-            int locatieGroepId = insertLocatie(locatieGroepName, LocalDate.now(), regelingId, geometryType);
+            int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke);
 
             locatieIds.forEach(locatieId -> linkLocatieToGroep(locatieId, locatieGroepId));
 
@@ -106,9 +108,6 @@ public class GioImporter {
             Node achtergrondVerwijzing = (Node) xPath.compile("//gio:achtergrondVerwijzing").evaluate(doc, XPathConstants.NODE);
             Node achtergrondActualiteit = (Node) xPath.compile("//gio:achtergrondActualiteit").evaluate(doc, XPathConstants.NODE);
             Node nauwkeurigheid = (Node) xPath.compile("//gio:nauwkeurigheid").evaluate(doc, XPathConstants.NODE);
-
-            int eindverantwoordelijkeId = getEindverantwoordelijkeId(regelingVersieId);
-            int makerId = getMakerId(regelingVersieId);
 
             insertInformatieObjectVersie(frbrWork.getTextContent(), frbrExpression.getTextContent(), regelingId, eindverantwoordelijkeId, makerId,
                     gioName, achtergrondVerwijzing.getTextContent(), achtergrondActualiteit.getTextContent(), nauwkeurigheid.getTextContent(),
@@ -202,6 +201,28 @@ public class GioImporter {
         return eindverantwoordelijke;
     }
 
+    private String getEindverantwoordelijke(int id) {
+        String sql = "SELECT stop_id FROM public.stop_waarde WHERE id = ?";
+        String errorMessage = "Eindverantwoordelijke niet gevonden in de database";
+
+        String eindverantwoordelijke = jdbcTemplate.query(
+                conn -> conn.prepareStatement(sql),
+                ps -> ps.setInt(1, id),
+                rs -> {
+                    if (rs.next()) {
+                        return rs.getString(1);
+                    }
+                    throw new IllegalArgumentException(errorMessage);
+                }
+        );
+
+        if (eindverantwoordelijke == null) {
+            throw new IllegalArgumentException(errorMessage);
+        }
+
+        return eindverantwoordelijke.substring(eindverantwoordelijke.lastIndexOf('/') + 1);
+    }
+
     private int getMakerId(int regelingVersieId) {
         String sql = "SELECT maker_id FROM bzk.regelingversie WHERE id = ?";
         String errorMessage = "Maker niet gevonden in de database";
@@ -254,11 +275,9 @@ public class GioImporter {
                 keyHolder
         );
 
-        if (keyHolder.getKey() == null) {
-            throw new IllegalStateException("Er ging iets mis bij het inserten van de geometrie " + gmlId);
-        }
-
-        return keyHolder.getKey().intValue();
+        return Optional.ofNullable(keyHolder.getKey())
+            .map(Number::intValue)
+            .orElseThrow(() -> new IllegalStateException("Er ging iets mis bij het inserten van de geometrie " + gmlId));
     }
 
     private int getGeometrieId(String gmlId) {
@@ -356,35 +375,15 @@ public class GioImporter {
         return id;
     }
 
-    private String getLocatieName(int locatieId) {
-        String sql = "SELECT naam FROM bzk.locatie WHERE id = ?";
-        String errorMessage = "Kon de naam van de locatie niet bepalen";
-
-        String name = jdbcTemplate.query(
-                conn -> conn.prepareStatement(sql),
-                ps -> ps.setInt(1, locatieId),
-                rs -> {
-                    if (rs.next()) {
-                        return rs.getString("naam");
-                    }
-                    throw new IllegalArgumentException(errorMessage);
-                }
-        );
-
-        if (name == null) {
-            throw new IllegalArgumentException(errorMessage);
-        }
-
-        return name;
-    }
-
-    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, int geometryId) {
+    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, int geometryId, String bgCode) {
         String sql =
-                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id) " +
-                "VALUES (?, ?, false, ?, ?, ?) " +
+                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie) " +
+                "VALUES (?, ?, false, ?, ?, ?, ?) " +
                 "RETURNING id";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
+        String objectType = "vlak".equals(geometryType) ? "gebied" : geometryType;
+        String identificatie = "nl.imow-" + bgCode + "." + objectType + "." + UUID.randomUUID().toString().replace("-", "").toLowerCase();
         jdbcTemplate.update(
                 conn -> {
                     PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -393,6 +392,7 @@ public class GioImporter {
                     ps.setInt(3, regelingId);
                     ps.setString(4, geometryType);
                     ps.setInt(5, geometryId);
+                    ps.setString(6, identificatie);
 
                     return ps;
                 },
@@ -404,13 +404,15 @@ public class GioImporter {
             .orElseThrow(() -> new IllegalStateException("Er ging iets mis bij het inserten van de locatie"));
     }
 
-    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType) {
+    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, String bgCode) {
         String sql =
-                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype) " +
-                "VALUES (?, ?, true, ?, ?) " +
+                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, identificatie) " +
+                "VALUES (?, ?, true, ?, ?, ?) " +
                 "RETURNING id";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
+        String objectType = "vlak".equals(geometryType) ? "gebied" : geometryType;
+        String identificatie = "nl.imow-" + bgCode + "." + objectType + "engroep." + UUID.randomUUID().toString().replace("-", "").toLowerCase();
         jdbcTemplate.update(
                 conn -> {
                     PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -418,6 +420,7 @@ public class GioImporter {
                     ps.setDate(2, Date.valueOf(dateStart));
                     ps.setInt(3, regelingId);
                     ps.setString(4, geometryType);
+                    ps.setString(5, identificatie);
 
                     return ps;
                 },
