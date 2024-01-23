@@ -86,6 +86,7 @@ public class GioImporter {
                 Node gmlNode = (Node) xPath.compile(".//*[@gml:id='id-" + id.getTextContent() + "']").evaluate(locatie, XPathConstants.NODE);
 
                 // Geometrie + Locatie
+                System.out.printf("Bezig met verwerken van locatie '%s' (%d/%d)%n", naam.getTextContent(), i + 1, locaties.getLength());
                 if (!geometryExists(id.getTextContent())) {
                     int geometrieId = insertGeometry(id.getTextContent(), naam.getTextContent(), getGml(gmlNode));
                     String geometryType = getGeometryType(geometrieId);
@@ -97,12 +98,14 @@ public class GioImporter {
             }
 
             // Groep locatie
+            System.out.println("Bezig met het maken van de groepslocatie");
             String geometryType = getLocatieGeometryType(locatieIds.get(0));
             int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke);
 
             locatieIds.forEach(locatieId -> linkLocatieToGroep(locatieId, locatieGroepId));
 
             // Informatieobjectversie
+            System.out.println("Bezig met het verwerken van de GIO");
             Node frbrWork = (Node) xPath.compile("//geo:FRBRWork").evaluate(doc, XPathConstants.NODE);
             Node frbrExpression = (Node) xPath.compile("//geo:FRBRExpression").evaluate(doc, XPathConstants.NODE);
             Node achtergrondVerwijzing = (Node) xPath.compile("//gio:achtergrondVerwijzing").evaluate(doc, XPathConstants.NODE);
