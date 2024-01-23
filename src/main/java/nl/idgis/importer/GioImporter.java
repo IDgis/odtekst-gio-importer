@@ -108,13 +108,16 @@ public class GioImporter {
             System.out.println("Bezig met het verwerken van de GIO");
             Node frbrWork = (Node) xPath.compile("//geo:FRBRWork").evaluate(doc, XPathConstants.NODE);
             Node frbrExpression = (Node) xPath.compile("//geo:FRBRExpression").evaluate(doc, XPathConstants.NODE);
-            Node achtergrondVerwijzing = (Node) xPath.compile("//gio:achtergrondVerwijzing").evaluate(doc, XPathConstants.NODE);
-            Node achtergrondActualiteit = (Node) xPath.compile("//gio:achtergrondActualiteit").evaluate(doc, XPathConstants.NODE);
-            Node nauwkeurigheid = (Node) xPath.compile("//gio:nauwkeurigheid").evaluate(doc, XPathConstants.NODE);
+            Node achtergrondVerwijzingNode = (Node) xPath.compile("//gio:achtergrondVerwijzing").evaluate(doc, XPathConstants.NODE);
+            Node achtergrondActualiteitNode = (Node) xPath.compile("//gio:achtergrondActualiteit").evaluate(doc, XPathConstants.NODE);
+            Node nauwkeurigheidNode = (Node) xPath.compile("//gio:nauwkeurigheid").evaluate(doc, XPathConstants.NODE);
+
+            String achtergrondVerwijzing = achtergrondVerwijzingNode != null ? achtergrondVerwijzingNode.getTextContent() : null;
+            String achtergrondActualiteit = achtergrondActualiteitNode != null ? achtergrondActualiteitNode.getTextContent() : null;
+            String nauwkeurigheid = nauwkeurigheidNode != null ? nauwkeurigheidNode.getTextContent() : null;
 
             insertInformatieObjectVersie(frbrWork.getTextContent(), frbrExpression.getTextContent(), regelingId, eindverantwoordelijkeId, makerId,
-                    gioName, achtergrondVerwijzing.getTextContent(), achtergrondActualiteit.getTextContent(), nauwkeurigheid.getTextContent(),
-                    locatieGroepId);
+                    gioName, achtergrondVerwijzing, achtergrondActualiteit, nauwkeurigheid, locatieGroepId);
         } catch (ParserConfigurationException | SAXException | IOException | XPathExpressionException e) {
             e.printStackTrace();
         }
@@ -454,17 +457,17 @@ public class GioImporter {
                 "VALUES (?, ?, 2056, ?, ?, ?, 1410, ?, ?, 3, '1.3.0', ?, ?, ?, ?)";
 
         jdbcTemplate.update(sql, ps -> {
-            ps.setString(1, frbrWork);
-            ps.setString(2, frbrExpression);
-            ps.setInt(3, regelingId);
-            ps.setInt(4, eindverantwoordelijkeId);
-            ps.setInt(5, makerId);
-            ps.setString(6, gioName);
-            ps.setString(7, frbrWork);
-            ps.setString(8, achtergrondVerwijzing);
-            ps.setDate(9, Date.valueOf(achergrondActualiteit));
-            ps.setInt(10, Integer.parseInt(nauwkeurigheid));
-            ps.setInt(11, locatieId);
+            ps.setObject(1, frbrWork);
+            ps.setObject(2, frbrExpression);
+            ps.setObject(3, regelingId);
+            ps.setObject(4, eindverantwoordelijkeId);
+            ps.setObject(5, makerId);
+            ps.setObject(6, gioName);
+            ps.setObject(7, frbrWork);
+            ps.setObject(8, achtergrondVerwijzing);
+            ps.setObject(9, achergrondActualiteit != null ? Date.valueOf(achergrondActualiteit) : null);
+            ps.setObject(10, nauwkeurigheid != null ? Integer.parseInt(nauwkeurigheid) : null);
+            ps.setObject(11, locatieId);
         });
     }
 
