@@ -90,7 +90,7 @@ public class GioImporter {
                 if (!geometryExists(id.getTextContent())) {
                     int geometrieId = insertGeometry(id.getTextContent(), naam.getTextContent(), getGml(gmlNode));
                     String geometryType = getGeometryType(geometrieId);
-                    locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke));
+                    locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke, regelingVersieId));
                 } else {
                     int geometrieId = getGeometrieId(id.getTextContent());
                     locatieIds.add(getLocatieId(geometrieId));
@@ -100,7 +100,7 @@ public class GioImporter {
             // Groep locatie
             System.out.println("Bezig met het maken van de groepslocatie");
             String geometryType = getLocatieGeometryType(locatieIds.get(0));
-            int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke);
+            int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke, regelingVersieId);
 
             locatieIds.forEach(locatieId -> linkLocatieToGroep(locatieId, locatieGroepId));
 
@@ -381,10 +381,10 @@ public class GioImporter {
         return id;
     }
 
-    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, int geometryId, String bgCode) {
+    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, int geometryId, String bgCode, int regelingversieId) {
         String sql =
-                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie) " +
-                "VALUES (?, ?, false, ?, ?, ?, ?) " +
+                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie, regelingversie_id) " +
+                "VALUES (?, ?, false, ?, ?, ?, ?, ?) " +
                 "RETURNING id";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -399,6 +399,7 @@ public class GioImporter {
                     ps.setString(4, geometryType);
                     ps.setInt(5, geometryId);
                     ps.setString(6, identificatie);
+                    ps.setInt(7, regelingversieId);
 
                     return ps;
                 },
@@ -410,10 +411,10 @@ public class GioImporter {
             .orElseThrow(() -> new IllegalStateException("Er ging iets mis bij het inserten van de locatie"));
     }
 
-    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, String bgCode) {
+    private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, String bgCode, int regelingversieId) {
         String sql =
-                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, identificatie) " +
-                "VALUES (?, ?, true, ?, ?, ?) " +
+                "INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, identificatie, regelingversie_id) " +
+                "VALUES (?, ?, true, ?, ?, ?, ?) " +
                 "RETURNING id";
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -427,6 +428,7 @@ public class GioImporter {
                     ps.setInt(3, regelingId);
                     ps.setString(4, geometryType);
                     ps.setString(5, identificatie);
+                    ps.setInt(6, regelingversieId);
 
                     return ps;
                 },
