@@ -253,7 +253,6 @@ public class GioImporter {
 
     private boolean geometryExists(String gmlId) {
         String sql = "SELECT * FROM bzk.geometrie WHERE geometrie_id = ?";
-        String errorMessage = "Kon niet bepalen of de geometrie met id '" + gmlId + "' al bestaat";
 
         return jdbcTemplate.query(
                 sql,
