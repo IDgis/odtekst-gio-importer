@@ -93,8 +93,8 @@ public class GioImporter {
                     locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke, regelingVersieId));
                 } else {
                     int geometrieId = getGeometrieId(id.getTextContent());
-                    locatieIds.add(getLocatieId(geometrieId));
                     int locatieId = getLocatieId(geometrieId, regelingVersieId);
+                    updateLocatie(locatieId, naam.getTextContent());
                     locatieIds.add(locatieId);
                 }
             }
@@ -383,6 +383,18 @@ public class GioImporter {
         }
 
         return id;
+    }
+
+    private void updateLocatie(int locatieId, String name) {
+        String sql = "UPDATE bzk.locatie SET naam = ? WHERE id = ?";
+
+        jdbcTemplate.update(conn -> {
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, name);
+            ps.setInt(2, locatieId);
+
+            return ps;
+        });
     }
 
     private int insertLocatie(String name, LocalDate dateStart, int regelingId, String geometryType, int geometryId, String bgCode, int regelingversieId) {
