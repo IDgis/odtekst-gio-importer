@@ -94,6 +94,8 @@ public class GioImporter {
                 } else {
                     int geometrieId = getGeometrieId(id.getTextContent());
                     locatieIds.add(getLocatieId(geometrieId));
+                    int locatieId = getLocatieId(geometrieId, regelingVersieId);
+                    locatieIds.add(locatieId);
                 }
             }
 
@@ -358,13 +360,16 @@ public class GioImporter {
         return geometryType;
     }
 
-    private int getLocatieId(int geometrieId) {
-        String sql = "SELECT id FROM bzk.locatie WHERE geometrie_id = ?";
+    private int getLocatieId(int geometrieId, int regelingversie_id) {
+        String sql = "SELECT id FROM bzk.locatie WHERE geometrie_id = ? and regelingversie_id = ?";
         String errorMessage = "Kon de id van de locatie niet ophalen";
 
         Integer id = jdbcTemplate.query(
                 conn -> conn.prepareStatement(sql),
-                ps -> ps.setInt(1, geometrieId),
+                ps -> {
+                    ps.setInt(1, geometrieId);
+                    ps.setInt(2, regelingversie_id);
+                },
                 rs -> {
                     if (rs.next()) {
                         return rs.getInt("id");
