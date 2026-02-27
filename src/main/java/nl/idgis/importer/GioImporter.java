@@ -83,7 +83,8 @@ public class GioImporter {
                 Node locatie = locaties.item(i);
                 Node naam = (Node) xPath.compile("./geo:naam").evaluate(locatie, XPathConstants.NODE);
                 Node id = (Node) xPath.compile(".//basisgeo:id").evaluate(locatie, XPathConstants.NODE);
-                Node gmlNode = (Node) xPath.compile(".//*[@gml:id='id-" + id.getTextContent() + "']").evaluate(locatie, XPathConstants.NODE);
+                Node geometrie = (Node) xPath.compile(".//basisgeo:geometrie").evaluate(locatie, XPathConstants.NODE);
+                Node gmlNode = (Node) xPath.compile(".//gml:*").evaluate(geometrie, XPathConstants.NODE);
 
                 // Geometrie + Locatie
                 System.out.printf("Bezig met verwerken van locatie '%s' (%d/%d)%n", naam.getTextContent(), i + 1, locaties.getLength());
