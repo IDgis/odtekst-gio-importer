@@ -80,7 +80,7 @@ validate_file() {
     log_ok "FRBRWork voldoet aan het voorgeschreven patroon"
   else
     log_err "FRBRWork ongeldig: $frbr_work"
-    echo "       Verwacht patroon: /join/id/regdata/<jaar-of-datum>/N2000_<gebiedsnaam>_(N2000|HR|VR)" >&2
+    echo "       Verwacht patroon: /join/id/regdata/mnre1153/<jaar-of-datum>/N2000_<gebiedsnaam>_(N2000|HR|VR)" >&2
     FAIL=1
   fi
 
