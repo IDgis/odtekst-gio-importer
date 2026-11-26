@@ -48,4 +48,11 @@ De importer zoekt de regelingversie via `regeling.expression`, leest alle `geo:L
 - Normen, normwaarden en GIO-delen worden niet verwerkt. Er is geen expliciete STOP-schema-validatie.
 - De importer maakt bij iedere uitvoering een nieuwe locatiegroep en informatieobjectversie; de import is niet volledig idempotent en er is geen expliciete transactie over de gehele import.
 
-Vereist Java 11, Gradle en een bestaande PostgreSQL/PostGIS-database met het verwachte schema. De code gebruikt vaste databasecodes en STOP-schemaversie `1.3.0`.
+Vereist Java 21, Gradle 8.5 of hoger en een bestaande PostgreSQL/PostGIS-database met het verwachte schema. De code gebruikt vaste databasecodes en STOP-schemaversie `1.3.0`.
+
+## Build en tests
+
+```bash
+gradle clean build
+gradle test
+```

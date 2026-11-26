@@ -1,6 +1,6 @@
-package nl.idgis;
+package nl.idgis.gioimporter;
 
-import nl.idgis.importer.GioImporter;
+import nl.idgis.gioimporter.importer.GioImporter;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.ComponentScan;

@@ -1,6 +1,6 @@
-package nl.idgis.config;
+package nl.idgis.gioimporter.config;
 
-import nl.idgis.importer.GioImporter;
+import nl.idgis.gioimporter.importer.GioImporter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
