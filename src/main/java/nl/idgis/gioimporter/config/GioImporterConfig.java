@@ -1,6 +1,8 @@
 package nl.idgis.gioimporter.config;
 
+import nl.idgis.gioimporter.application.port.GioReader;
 import nl.idgis.gioimporter.importer.GioImporter;
+import nl.idgis.gioimporter.infrastructure.xml.XmlGioReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,11 +39,16 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public GioImporter gioImporter(JdbcTemplate jdbcTemplate) {
+    public GioReader gioReader() {
+        return new XmlGioReader();
+    }
+
+    @Bean
+    public GioImporter gioImporter(JdbcTemplate jdbcTemplate, GioReader gioReader) {
         String inputFile = environment.getProperty("input.file");
         String gioName = environment.getProperty("gio.name");
         String regelingExpression = environment.getProperty("regeling.expression");
 
-        return new GioImporter(jdbcTemplate, inputFile, gioName, regelingExpression);
+        return new GioImporter(jdbcTemplate, gioReader, inputFile, gioName, regelingExpression);
     }
 }

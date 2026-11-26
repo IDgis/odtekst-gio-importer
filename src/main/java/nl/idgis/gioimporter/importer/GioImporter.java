@@ -1,51 +1,32 @@
 package nl.idgis.gioimporter.importer;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import nl.idgis.gioimporter.application.port.GioReader;
+import nl.idgis.gioimporter.domain.GeographicContext;
+import nl.idgis.gioimporter.domain.Gio;
+import nl.idgis.gioimporter.domain.GioLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
-import org.springframework.stereotype.Component;
-import org.w3c.dom.Document;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
 
-import javax.xml.XMLConstants;
-import javax.xml.namespace.NamespaceContext;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpressionException;
-import javax.xml.xpath.XPathFactory;
 import java.io.File;
-import java.io.IOException;
-import java.io.StringWriter;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.*;
 
-@Component
 public class GioImporter {
 
     private final JdbcTemplate jdbcTemplate;
+    private final GioReader gioReader;
 
     private final String inputFile;
     private final String gioName;
     private final String regelingExpression;
 
-    @Autowired
-    public GioImporter(JdbcTemplate jdbcTemplate, String inputFile, String gioName, String regelingExpression) {
+    public GioImporter(JdbcTemplate jdbcTemplate, GioReader gioReader, String inputFile, String gioName, String regelingExpression) {
         this.jdbcTemplate = jdbcTemplate;
+        this.gioReader = gioReader;
         this.inputFile = inputFile;
         this.gioName = gioName;
         this.regelingExpression = regelingExpression;
@@ -64,81 +45,35 @@ public class GioImporter {
         int makerId = getMakerId(regelingVersieId);
         String eindverantwoordelijke = getEindverantwoordelijke(eindverantwoordelijkeId);
 
-        try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setNamespaceAware(true);
-            DocumentBuilder db = dbf.newDocumentBuilder();
-            Document doc = db.parse(file);
+        Gio gio = gioReader.read(file.toPath());
+        List<Integer> locatieIds = new ArrayList<>();
+        for (int i = 0; i < gio.locations().size(); i++) {
+            GioLocation locatie = gio.locations().get(i);
+            String naam = locatie.name();
+            String id = locatie.geometry().id();
 
-            XPath xPath = new XPathBuilder()
-                .xmlns("basisgeo", "http://www.geostandaarden.nl/basisgeometrie/1.0")
-                .xmlns("geo", "https://standaarden.overheid.nl/stop/imop/geo/")
-                .xmlns("gio", "https://standaarden.overheid.nl/stop/imop/gio/")
-                .xmlns("gml", "http://www.opengis.net/gml/3.2")
-                .build();
-
-            NodeList locaties = (NodeList) xPath.compile("//geo:Locatie").evaluate(doc, XPathConstants.NODESET);
-            List<Integer> locatieIds = new ArrayList<>();
-            for (int i = 0; i < locaties.getLength(); i++) {
-                Node locatie = locaties.item(i);
-                Node naam = (Node) xPath.compile("./geo:naam").evaluate(locatie, XPathConstants.NODE);
-                Node id = (Node) xPath.compile(".//basisgeo:id").evaluate(locatie, XPathConstants.NODE);
-                Node geometrie = (Node) xPath.compile(".//basisgeo:geometrie").evaluate(locatie, XPathConstants.NODE);
-                Node gmlNode = (Node) xPath.compile(".//gml:*").evaluate(geometrie, XPathConstants.NODE);
-
-                // Geometrie + Locatie
-                System.out.printf("Bezig met verwerken van locatie '%s' (%d/%d)%n", naam.getTextContent(), i + 1, locaties.getLength());
-                if (!geometryExists(id.getTextContent())) {
-                    int geometrieId = insertGeometry(id.getTextContent(), naam.getTextContent(), getGml(gmlNode));
-                    String geometryType = getGeometryType(geometrieId);
-                    locatieIds.add(insertLocatie(naam.getTextContent(), LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke, regelingVersieId));
-                } else {
-                    int geometrieId = getGeometrieId(id.getTextContent());
-                    int locatieId = getLocatieId(geometrieId, regelingVersieId);
-                    updateLocatie(locatieId, naam.getTextContent());
-                    locatieIds.add(locatieId);
-                }
+            System.out.printf("Bezig met verwerken van locatie '%s' (%d/%d)%n", naam, i + 1, gio.locations().size());
+            if (!geometryExists(id)) {
+                int geometrieId = insertGeometry(id, naam, locatie.geometry().gml());
+                String geometryType = getGeometryType(geometrieId);
+                locatieIds.add(insertLocatie(naam, LocalDate.now(), regelingId, geometryType, geometrieId, eindverantwoordelijke, regelingVersieId));
+            } else {
+                int geometrieId = getGeometrieId(id);
+                int locatieId = getLocatieId(geometrieId, regelingVersieId);
+                updateLocatie(locatieId, naam);
+                locatieIds.add(locatieId);
             }
-
-            // Groep locatie
-            System.out.println("Bezig met het maken van de groepslocatie");
-            String geometryType = getLocatieGeometryType(locatieIds.get(0));
-            int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke, regelingVersieId);
-
-            locatieIds.forEach(locatieId -> linkLocatieToGroep(locatieId, locatieGroepId));
-
-            // Informatieobjectversie
-            System.out.println("Bezig met het verwerken van de GIO");
-            Node frbrWork = (Node) xPath.compile("//geo:FRBRWork").evaluate(doc, XPathConstants.NODE);
-            Node frbrExpression = (Node) xPath.compile("//geo:FRBRExpression").evaluate(doc, XPathConstants.NODE);
-            Node achtergrondVerwijzingNode = (Node) xPath.compile("//gio:achtergrondVerwijzing").evaluate(doc, XPathConstants.NODE);
-            Node achtergrondActualiteitNode = (Node) xPath.compile("//gio:achtergrondActualiteit").evaluate(doc, XPathConstants.NODE);
-            Node nauwkeurigheidNode = (Node) xPath.compile("//gio:nauwkeurigheid").evaluate(doc, XPathConstants.NODE);
-
-            String achtergrondVerwijzing = achtergrondVerwijzingNode != null ? achtergrondVerwijzingNode.getTextContent() : null;
-            String achtergrondActualiteit = achtergrondActualiteitNode != null ? achtergrondActualiteitNode.getTextContent() : null;
-            String nauwkeurigheid = nauwkeurigheidNode != null ? nauwkeurigheidNode.getTextContent() : null;
-
-            insertInformatieObjectVersie(frbrWork.getTextContent(), frbrExpression.getTextContent(), regelingId, eindverantwoordelijkeId, makerId,
-                    gioName, achtergrondVerwijzing, achtergrondActualiteit, nauwkeurigheid, locatieGroepId);
-        } catch (ParserConfigurationException | SAXException | IOException | XPathExpressionException e) {
-            e.printStackTrace();
         }
-    }
 
-    private String getGml(Node gmlNode) {
-        try (StringWriter sw = new StringWriter()) {
-            TransformerFactory tf = TransformerFactory.newInstance();
-            tf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-            Transformer t = tf.newTransformer();
-            t.setOutputProperty(OutputKeys.INDENT, "yes");
-            t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
-            t.transform(new DOMSource(gmlNode), new StreamResult(sw));
+        System.out.println("Bezig met het maken van de groepslocatie");
+        String geometryType= getLocatieGeometryType(locatieIds.get(0));
+        int locatieGroepId = insertLocatie(gioName, LocalDate.now(), regelingId, geometryType, eindverantwoordelijke, regelingVersieId);
+        locatieIds.forEach(locatieId -> linkLocatieToGroep(locatieId, locatieGroepId));
 
-            return sw.toString();
-        } catch (IOException | TransformerException e) {
-            throw new IllegalStateException("GML kon niet geparsed worden", e);
-        }
+        System.out.println("Bezig met het verwerken van de GIO");
+        GeographicContext context = gio.geographicContext();
+        insertInformatieObjectVersie(gio.frbrWork(), gio.frbrExpression(), regelingId, eindverantwoordelijkeId, makerId,
+                gioName, context.backgroundReference(), context.backgroundActuality(), context.accuracy(), locatieGroepId);
     }
 
     private int getRegelingVersieId(String expressionId) {
@@ -488,40 +423,5 @@ public class GioImporter {
             ps.setObject(10, nauwkeurigheid != null ? Integer.parseInt(nauwkeurigheid) : null);
             ps.setObject(11, locatieId);
         });
-    }
-
-    private static class XPathBuilder {
-        private final Map<String, String> namespaces = new HashMap<>();
-
-        public XPathBuilder xmlns(String prefix, String namespaceURI) {
-            namespaces.put(prefix, namespaceURI);
-            return this;
-        }
-
-        public XPath build() {
-            XPath xp = XPathFactory.newInstance().newXPath();
-            xp.setNamespaceContext(new NamespaceContext() {
-
-                @Override
-                public String getNamespaceURI(String prefix) {
-                    return namespaces.get(prefix);
-                }
-
-                @Override
-                public String getPrefix(String namespaceURI) {
-                    return getPrefixes(namespaceURI).next();
-                }
-
-                @Override
-                public Iterator<String> getPrefixes(String namespaceURI) {
-                    return namespaces.entrySet().stream()
-                        .filter(entry -> entry.getValue().equals(namespaceURI))
-                        .map(Map.Entry::getKey)
-                        .iterator();
-                }
-            });
-
-            return xp;
-        }
     }
 }
