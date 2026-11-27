@@ -34,16 +34,16 @@ class GioImportTransactionTest {
     Path temp;
 
     @Test
-    void commitsSuccessfulImport() throws Exception {
-        runImport(false);
+    void rollsBackWhenFinalInsertFails() throws Exception {
+        runImport(true, false);
     }
 
     @Test
-    void rollsBackWhenFinalInsertFails() throws Exception {
-        runImport(true);
+    void rollsBackWhenFrbrExpressionAlreadyExists() throws Exception {
+        runImport(false, true);
     }
 
-    private void runImport(boolean fail) throws Exception {
+    private void runImport(boolean fail, boolean duplicate) throws Exception {
         DataSource ds = mock(DataSource.class);
         Connection connection = mock(Connection.class);
 
@@ -68,6 +68,12 @@ class GioImportTransactionTest {
         when(reader.read(file)).thenAnswer(call -> {
             assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
             return gio;
+        });
+        when(objects.existsByFrbrExpression("expression")).thenAnswer(call -> {
+            assertTrue(TransactionSynchronizationManager.isActualTransactionActive());
+            assertSame(connection, DataSourceUtils.getConnection(ds));
+            DataSourceUtils.releaseConnection(connection, ds);
+            return duplicate;
         });
         when(regelingen.getContext("regeling")).thenAnswer(call -> {
             assertTrue(TransactionSynchronizationManager.isActualTransactionActive());
@@ -99,18 +105,26 @@ class GioImportTransactionTest {
 
             var service = new GioImportService(reader, ctx.getBean(GioImportTransaction.class));
             var request = new ImportRequest(file, "group", "regeling");
-            if (fail) {
+            if (duplicate) {
+                assertThrows(IllegalArgumentException.class, () -> service.importGio(request));
+            } else if (fail) {
                 assertThrows(IllegalStateException.class, () -> service.importGio(request));
             } else {
                 service.importGio(request);
             }
 
-            verify(locations).linkToGroup(20, 30);
-            verify(objects).insert(any());
+            verify(objects).existsByFrbrExpression("expression");
+            if (duplicate) {
+                verifyNoInteractions(regelingen, geometries, locations);
+                verifyNoMoreInteractions(objects);
+            } else {
+                verify(locations).linkToGroup(20, 30);
+                verify(objects).insert(any());
+            }
 
             var order = inOrder(connection);
             order.verify(connection).setAutoCommit(false);
-            if (fail) {
+            if (fail || duplicate) {
                 order.verify(connection).rollback();
                 verify(connection, never()).commit();
             } else {

@@ -3,6 +3,8 @@ package nl.idgis.gioimporter.infrastructure.persistence;
 import nl.idgis.gioimporter.application.model.NewInformationObjectVersion;
 import nl.idgis.gioimporter.domain.GeographicContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementSetter;
@@ -67,6 +69,23 @@ class JdbcRepositoryTest {
         new JdbcLocationRepository(jdbc).linkToGroup(12, 34);
         verify(ps).setInt(1, 34);
         verify(ps).setInt(2, 12);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void checksFrbrExpressionGlobally(boolean exists) {
+        String sql = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM bzk.informatieobjectversie
+                    WHERE frbr_expression = ?
+                )
+                """;
+
+        when(jdbc.queryForObject(sql, Boolean.class, "expression")).thenReturn(exists);
+        assertEquals(exists, new JdbcInformationObjectRepository(jdbc).existsByFrbrExpression("expression"));
+        verify(jdbc).queryForObject(sql, Boolean.class, "expression");
+        verifyNoMoreInteractions(jdbc);
     }
 
     @Test

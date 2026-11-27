@@ -17,6 +17,19 @@ public final class JdbcInformationObjectRepository implements InformationObjectR
     }
 
     @Override
+    public boolean existsByFrbrExpression(String frbrExpression) {
+        String sql = """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM bzk.informatieobjectversie
+                    WHERE frbr_expression = ?
+                )
+                """;
+
+        return jdbcTemplate.queryForObject(sql, Boolean.class, frbrExpression);
+    }
+
+    @Override
     public void insert(NewInformationObjectVersion version) {
         GeographicContext context = version.geographicContext();
         String sql = """

@@ -41,6 +41,10 @@ public class GioImportTransaction {
 
     @Transactional(rollbackFor = Exception.class)
     public void importGio(ImportRequest request, Gio gio) {
+        if (informationObjects.existsByFrbrExpression(gio.frbrExpression())) {
+            throw new IllegalArgumentException("FRBRExpression bestaat al: " + gio.frbrExpression());
+        }
+
         RegelingContext context = regelingen.getContext(request.regelingExpression());
 
         List<Integer> ids = new ArrayList<>();

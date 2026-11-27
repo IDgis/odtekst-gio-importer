@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -70,6 +71,7 @@ class GioImportServiceTest {
 
         var order = inOrder(regelingen, reader, geometries, locations, objects);
         order.verify(reader).read(request.inputFile());
+        order.verify(objects).existsByFrbrExpression("expression");
         order.verify(regelingen).getContext("regeling");
         order.verify(geometries).findId("a");
         order.verify(geometries).insert("first", first.geometry());
@@ -114,7 +116,24 @@ class GioImportServiceTest {
         assertThrows(IllegalStateException.class, () -> service.importGio(request));
         verify(locations, never()).insert(any());
         verify(locations, never()).insertGroup(any());
-        verifyNoInteractions(objects);
+        verify(objects).existsByFrbrExpression("expression");
+        verifyNoMoreInteractions(objects);
+    }
+
+    @Test
+    void existingFrbrExpressionStopsBeforeOtherRepositoryCalls() throws Exception {
+        ImportRequest request = request(List.of(first));
+
+        when(objects.existsByFrbrExpression("expression")).thenReturn(true);
+
+        var error = assertThrows(IllegalArgumentException.class, () -> service.importGio(request));
+        assertEquals("FRBRExpression bestaat al: expression", error.getMessage());
+
+        var order = inOrder(reader, objects);
+        order.verify(reader).read(request.inputFile());
+        order.verify(objects).existsByFrbrExpression("expression");
+        verifyNoMoreInteractions(reader, objects);
+        verifyNoInteractions(regelingen, geometries, locations);
     }
 
     @Test
