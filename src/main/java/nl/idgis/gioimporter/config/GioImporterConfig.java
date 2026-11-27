@@ -10,20 +10,20 @@ import nl.idgis.gioimporter.infrastructure.xml.XmlGioReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-import javax.sql.DataSource;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
 
 @Configuration
-@EnableTransactionManagement
+@Import(DatabaseConfig.class)
+@PropertySource("classpath:application.properties")
+@PropertySource(value = "file:${spring.config.location}", ignoreResourceNotFound = true)
 public class GioImporterConfig {
 
     private final Environment environment;
@@ -31,22 +31,6 @@ public class GioImporterConfig {
     @Autowired
     public GioImporterConfig(Environment environment) {
         this.environment = environment;
-    }
-
-    @Bean
-    public DataSource dataSource() {
-        DriverManagerDataSource driverManagerDataSource = new DriverManagerDataSource();
-        driverManagerDataSource.setDriverClassName("org.postgresql.Driver");
-        driverManagerDataSource.setUrl(environment.getProperty("db.url"));
-        driverManagerDataSource.setUsername(environment.getProperty("db.username"));
-        driverManagerDataSource.setPassword(environment.getProperty("db.password"));
-
-        return driverManagerDataSource;
-    }
-
-    @Bean
-    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
     }
 
     @Bean
@@ -97,11 +81,6 @@ public class GioImporterConfig {
     public LocationImportService locationImportService(GeometryRepository geometryRepository,
             LocationRepository locationRepository, ImowIdentifierGenerator identifiers, Clock clock) {
         return new LocationImportService(geometryRepository, locationRepository, identifiers, clock);
-    }
-
-    @Bean
-    public DataSourceTransactionManager transactionManager(DataSource dataSource) {
-        return new DataSourceTransactionManager(dataSource);
     }
 
     @Bean
