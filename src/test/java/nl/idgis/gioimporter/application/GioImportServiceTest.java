@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,12 +55,14 @@ class GioImportServiceTest {
         when(regelingen.getContext("regeling")).thenReturn(context);
         when(reader.read(file)).thenReturn(new Gio("work", "expression", metadata, input));
 
-        return new ImportRequest(file, "group", "regeling");
+        return new ImportRequest(file, "group", "regeling", false);
     }
 
-    @Test
-    void importsNewAndExistingLocationsWithUniformType() throws Exception {
-        ImportRequest request = request(List.of(first, second));
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void importsNewAndExistingLocationsWithUniformType(boolean ontwerp) throws Exception {
+        ImportRequest base = request(List.of(first, second));
+        ImportRequest request = new ImportRequest(base.inputFile(), base.gioName(), base.regelingExpression(), ontwerp);
 
         when(geometries.findId("a")).thenReturn(OptionalInt.empty());
         when(geometries.insert("first", first.geometry())).thenReturn(10);
@@ -85,10 +88,10 @@ class GioImportServiceTest {
         order.verify(geometries).getType(11);
         order.verify(locations).findByGeometryId(10);
         order.verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.SURFACE, 10,
-                "nl.imow-mnre1153.gebied.12345678123412341234123456789abc"));
+                "nl.imow-mnre1153.gebied.12345678123412341234123456789abc", ontwerp));
         order.verify(locations).findByGeometryId(11);
         order.verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, "vlak",
-                "nl.imow-mnre1153.gebiedengroep.12345678123412341234123456789abc"));
+                "nl.imow-mnre1153.gebiedengroep.12345678123412341234123456789abc", ontwerp));
         order.verify(locations).linkToGroup(20, 30);
         order.verify(locations).linkToGroup(21, 30);
         order.verify(objects).insert(new NewInformationObjectVersion("work", "expression", 1, 3, 4, "group", metadata, 30));
@@ -113,7 +116,7 @@ class GioImportServiceTest {
         service.importGio(request);
 
         verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, type.databaseValue(),
-                "nl.imow-mnre1153." + type.imowObjectType() + "engroep.12345678123412341234123456789abc"));
+                "nl.imow-mnre1153." + type.imowObjectType() + "engroep.12345678123412341234123456789abc", false));
         verify(locations).linkToGroup(20, 30);
         verify(locations).linkToGroup(21, 30);
         verify(locations, never()).insert(any());
@@ -150,7 +153,7 @@ class GioImportServiceTest {
         service.importGio(request);
 
         verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, "punt",
-                "nl.imow-mnre1153.puntengroep.12345678123412341234123456789abc"));
+                "nl.imow-mnre1153.puntengroep.12345678123412341234123456789abc", false));
         verify(locations).linkToGroup(20, 30);
         verify(geometries, never()).insert(anyString(), any());
         verify(locations, never()).insert(any());
@@ -170,7 +173,7 @@ class GioImportServiceTest {
         service.importGio(request);
 
         verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.POINT, 10,
-                "nl.imow-mnre1153.punt.12345678123412341234123456789abc"));
+                "nl.imow-mnre1153.punt.12345678123412341234123456789abc", false));
         verify(locations).linkToGroup(20, 30);
         verify(geometries, never()).insert(anyString(), any());
         verify(objects).insert(any());
@@ -199,14 +202,14 @@ class GioImportServiceTest {
         when(reader.read(file)).thenThrow(new IllegalStateException("invalid XML"));
 
         assertThrows(IllegalStateException.class, () -> service.importGio(
-                new ImportRequest(file, "group", "regeling")));
+                new ImportRequest(file, "group", "regeling", false)));
         verifyNoInteractions(regelingen, geometries, locations, objects);
     }
 
     @Test
     void missingFileStopsBeforeRepositoryCalls() {
         assertThrows(IllegalArgumentException.class, () -> service.importGio(
-                new ImportRequest(temp.resolve("missing.gml"), "group", "regeling")));
+                new ImportRequest(temp.resolve("missing.gml"), "group", "regeling", false)));
         verifyNoInteractions(reader, regelingen, geometries, locations, objects);
     }
 }

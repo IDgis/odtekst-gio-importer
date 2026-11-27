@@ -142,7 +142,7 @@ class GioImportTransactionTest {
             ctx.refresh();
 
             var service = new GioImportService(reader, ctx.getBean(GioImportTransaction.class));
-            var request = new ImportRequest(file, "group", "regeling");
+            var request = new ImportRequest(file, "group", "regeling", false);
             if (duplicate || mismatch || foreign || mixed) {
                 assertThrows(IllegalArgumentException.class, () -> service.importGio(request));
             } else if (fail) {

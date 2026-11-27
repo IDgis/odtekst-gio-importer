@@ -61,10 +61,12 @@ public final class JdbcLocationRepository implements LocationRepository {
     @Override
     public int insert(NewLocation location) {
         String sql = """
-                INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie, regelingversie_id)
-                VALUES (?, ?, false, ?, ?, ?, ?, ?)
+                INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie, regelingversie_id%s)
+                VALUES (?, ?, false, ?, ?, ?, ?, ?%s)
                 RETURNING id
-                """;
+                """.formatted(
+                        location.ontwerp() ? ", procedure_status" : "",
+                        location.ontwerp() ? ", ?" : "");
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(
@@ -77,6 +79,9 @@ public final class JdbcLocationRepository implements LocationRepository {
                     ps.setInt(5, location.geometryId());
                     ps.setString(6, location.identification());
                     ps.setInt(7, location.regelingVersionId());
+                    if (location.ontwerp()) {
+                        ps.setString(8, "ontwerp");
+                    }
 
                     return ps;
                 },
@@ -91,10 +96,12 @@ public final class JdbcLocationRepository implements LocationRepository {
     @Override
     public int insertGroup(NewLocationGroup location) {
         String sql = """
-                INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, identificatie, regelingversie_id)
-                VALUES (?, ?, true, ?, ?, ?, ?)
+                INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, identificatie, regelingversie_id%s)
+                VALUES (?, ?, true, ?, ?, ?, ?%s)
                 RETURNING id
-                """;
+                """.formatted(
+                        location.ontwerp() ? ", procedure_status" : "",
+                        location.ontwerp() ? ", ?" : "");
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
         jdbcTemplate.update(
@@ -106,6 +113,9 @@ public final class JdbcLocationRepository implements LocationRepository {
                     ps.setString(4, location.geometryType());
                     ps.setString(5, location.identification());
                     ps.setInt(6, location.regelingVersionId());
+                    if (location.ontwerp()) {
+                        ps.setString(7, "ontwerp");
+                    }
 
                     return ps;
                 },

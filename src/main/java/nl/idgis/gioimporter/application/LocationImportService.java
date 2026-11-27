@@ -23,7 +23,7 @@ public final class LocationImportService {
         this.clock = clock;
     }
 
-    public int importLocation(GioLocation location, StoredGeometry geometry, RegelingContext context) {
+    public int importLocation(GioLocation location, StoredGeometry geometry, RegelingContext context, boolean ontwerp) {
         var existing = locations.findByGeometryId(geometry.id());
 
         for (var stored : existing) {
@@ -42,6 +42,6 @@ public final class LocationImportService {
 
         return locations.insert(new NewLocation(location.name(), LocalDate.now(clock),
                 context.regelingId(), context.regelingVersionId(), type, geometryId,
-                identifiers.location(context.authorityCode(), type)));
+                identifiers.location(context.authorityCode(), type), ontwerp));
     }
 }

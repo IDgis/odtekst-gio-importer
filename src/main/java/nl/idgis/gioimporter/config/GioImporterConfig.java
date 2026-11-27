@@ -73,8 +73,20 @@ public class GioImporterConfig {
         return new ImportRequest(
                 Path.of(Objects.requireNonNull(environment.getProperty("input.file"))),
                 environment.getProperty("gio.name"),
-                environment.getProperty("regeling.expression")
+                environment.getProperty("regeling.expression"),
+                parseOntwerp(environment.getProperty("regeling.ontwerp", "false"))
         );
+    }
+
+    static boolean parseOntwerp(String value) {
+        if ("true".equalsIgnoreCase(value)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return false;
+        }
+
+        throw new IllegalArgumentException("ONTWERP moet true of false zijn: " + value);
     }
 
     @Bean

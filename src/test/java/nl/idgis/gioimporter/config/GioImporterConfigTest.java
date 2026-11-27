@@ -4,6 +4,8 @@ import nl.idgis.gioimporter.application.GioImportService;
 import nl.idgis.gioimporter.application.GioImportTransaction;
 import nl.idgis.gioimporter.application.ImportRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
@@ -17,6 +19,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GioImporterConfigTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "TRUE", "false", "FALSE"})
+    void parsesOntwerp(String value) {
+        assertEquals(Boolean.parseBoolean(value), GioImporterConfig.parseOntwerp(value));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "yes", "1", " true "})
+    void rejectsInvalidOntwerp(String value) {
+        assertThrows(IllegalArgumentException.class, () -> GioImporterConfig.parseOntwerp(value));
+    }
 
     @Test
     void wiresProductionConfigurationWithoutConnectingToDatabase() {
@@ -39,7 +53,7 @@ class GioImporterConfigTest {
 
             assertSame(ds, context.getBean(JdbcTemplate.class).getDataSource());
             assertSame(ds, context.getBean(DataSourceTransactionManager.class).getDataSource());
-            assertEquals(new ImportRequest(Path.of("input.gml"), "group", "regeling"),
+            assertEquals(new ImportRequest(Path.of("input.gml"), "group", "regeling", false),
                     context.getBean(ImportRequest.class));
         }
     }

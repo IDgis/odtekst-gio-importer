@@ -68,14 +68,14 @@ public class GioImportTransaction {
 
             LOGGER.log(Level.INFO, "Bezig met verwerken van locatie ''{0}'' ({1}/{2})",
                     new Object[] { location.name(), i + 1, gio.locations().size() });
-            ids.add(locationImporter.importLocation(location, storedGeometries.get(i), context));
+            ids.add(locationImporter.importLocation(location, storedGeometries.get(i), context, request.ontwerp()));
         }
 
         LOGGER.info("Bezig met het maken van de groepslocatie");
         String type = geometryType.databaseValue();
         int groupId = locations.insertGroup(new NewLocationGroup(request.gioName(), LocalDate.now(clock),
                 context.regelingId(), context.regelingVersionId(), type,
-                identifiers.group(context.authorityCode(), type)));
+                identifiers.group(context.authorityCode(), type), request.ontwerp()));
         ids.forEach(id -> locations.linkToGroup(id, groupId));
 
         LOGGER.info("Bezig met het verwerken van de GIO");

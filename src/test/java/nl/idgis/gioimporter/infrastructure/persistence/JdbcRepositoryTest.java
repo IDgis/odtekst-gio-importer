@@ -1,21 +1,30 @@
 package nl.idgis.gioimporter.infrastructure.persistence;
 
 import nl.idgis.gioimporter.application.model.NewInformationObjectVersion;
+import nl.idgis.gioimporter.application.model.NewLocation;
+import nl.idgis.gioimporter.application.model.NewLocationGroup;
 import nl.idgis.gioimporter.domain.GeographicContext;
+import nl.idgis.gioimporter.domain.GeometryType;
 import nl.idgis.gioimporter.domain.StoredLocation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.ResultSetExtractor;
+import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,12 +83,58 @@ class JdbcRepositoryTest {
                 ORDER BY datum_begin DESC, id DESC
                 """;
 
-        when(jdbc.query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(10)))
+        when(jdbc.query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(Integer.valueOf(10))))
                 .thenAnswer(call -> call.<ResultSetExtractor<List<StoredLocation>>>getArgument(1).extractData(rs));
 
         var expected = List.of(new StoredLocation(42, 7, 8), new StoredLocation(41, 9, 6)).subList(0, count);
         assertEquals(expected, new JdbcLocationRepository(jdbc).findByGeometryId(10));
-        verify(jdbc).query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(10));
+        verify(jdbc).query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(Integer.valueOf(10)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void insertsLocationWithOptionalOntwerp(boolean ontwerp) throws Exception {
+        assertLocationInsert(ontwerp, false);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void insertsGroupWithOptionalOntwerp(boolean ontwerp) throws Exception {
+        assertLocationInsert(ontwerp, true);
+    }
+
+    private void assertLocationInsert(boolean ontwerp, boolean group) throws Exception {
+        var connection = mock(java.sql.Connection.class);
+        var ps = mock(PreparedStatement.class);
+        var sql = new AtomicReference<String>();
+
+        when(connection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                .thenAnswer(call -> { sql.set(call.getArgument(0)); return ps; });
+        when(jdbc.update(any(PreparedStatementCreator.class),
+                any(KeyHolder.class))).thenAnswer(call -> {
+            call.<PreparedStatementCreator>getArgument(0).createPreparedStatement(connection);
+            call.<KeyHolder>getArgument(1).getKeyList().add(Map.of("id", 42));
+            return 1;
+        });
+
+        var repository = new JdbcLocationRepository(jdbc);
+        var date = LocalDate.of(2026, 11, 27);
+        int id = group
+                ? repository.insertGroup(new NewLocationGroup("group", date, 1, 2, "punt", "id", ontwerp))
+                : repository.insert(new NewLocation("location", date, 1, 2, GeometryType.POINT, 10, "id", ontwerp));
+
+        assertEquals(42, id);
+        assertEquals(ontwerp, sql.get().contains("procedure_status"));
+        assertEquals((group ? 6 : 7) + (ontwerp ? 1 : 0), sql.get().chars().filter(c -> c == '?').count());
+
+        int index = group ? 7 : 8;
+
+        if (ontwerp) {
+            verify(ps).setString(index, "ontwerp");
+        } else {
+            verify(ps, never()).setString(eq(index), anyString());
+        }
+        verify(ps).setInt(index - 1, 2);
     }
 
     @Test
