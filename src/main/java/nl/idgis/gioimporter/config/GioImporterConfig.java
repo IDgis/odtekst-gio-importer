@@ -1,9 +1,6 @@
 package nl.idgis.gioimporter.config;
 
-import nl.idgis.gioimporter.application.GioImportService;
-import nl.idgis.gioimporter.application.ImowIdentifierGenerator;
-import nl.idgis.gioimporter.application.ImportRequest;
-import nl.idgis.gioimporter.application.LocationImportService;
+import nl.idgis.gioimporter.application.*;
 import nl.idgis.gioimporter.application.port.*;
 import nl.idgis.gioimporter.infrastructure.persistence.JdbcGeometryRepository;
 import nl.idgis.gioimporter.infrastructure.persistence.JdbcInformationObjectRepository;
@@ -15,7 +12,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
 import java.nio.file.Path;
@@ -24,6 +23,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 @Configuration
+@EnableTransactionManagement
 public class GioImporterConfig {
 
     private final Environment environment;
@@ -100,10 +100,20 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public GioImportService gioImportService(GioReader reader, RegelingRepository regelingen,
+    public DataSourceTransactionManager transactionManager(DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Bean
+    public GioImportTransaction gioImportTransaction(RegelingRepository regelingen,
             LocationImportService locationImporter, LocationRepository locations,
             InformationObjectRepository informationObjects, ImowIdentifierGenerator identifiers, Clock clock) {
-        return new GioImportService(reader, regelingen, locationImporter, locations,
+        return new GioImportTransaction(regelingen, locationImporter, locations,
                 informationObjects, identifiers, clock);
+    }
+
+    @Bean
+    public GioImportService gioImportService(GioReader reader, GioImportTransaction transaction) {
+        return new GioImportService(reader, transaction);
     }
 }

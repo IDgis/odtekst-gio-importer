@@ -37,7 +37,8 @@ class GioImportServiceTest {
     private final ImowIdentifierGenerator identifiers = new ImowIdentifierGenerator(
             () -> UUID.fromString("12345678-1234-1234-1234-123456789abc"));
     private final LocationImportService locationImporter = new LocationImportService(geometries, locations, identifiers, clock);
-    private final GioImportService service = new GioImportService(reader, regelingen, locationImporter, locations, objects, identifiers, clock);
+    private final GioImportService service = new GioImportService(reader, new GioImportTransaction(regelingen,
+            locationImporter, locations, objects, identifiers, clock));
     private final RegelingContext context = new RegelingContext(1, 2, 3, 4, "mnre1153");
     private final GioLocation first = new GioLocation("first", new GioGeometry("a", "gml-a"));
     private final GioLocation second = new GioLocation("second", new GioGeometry("b", "changed-gml"));
@@ -68,8 +69,8 @@ class GioImportServiceTest {
         service.importGio(request);
 
         var order = inOrder(regelingen, reader, geometries, locations, objects);
-        order.verify(regelingen).getContext("regeling");
         order.verify(reader).read(request.inputFile());
+        order.verify(regelingen).getContext("regeling");
         order.verify(geometries).findId("a");
         order.verify(geometries).insert("first", first.geometry());
         order.verify(geometries).getType(10);
@@ -114,6 +115,17 @@ class GioImportServiceTest {
         verify(locations, never()).insert(any());
         verify(locations, never()).insertGroup(any());
         verifyNoInteractions(objects);
+    }
+
+    @Test
+    void unreadableXmlStopsBeforeRepositoryCalls() throws Exception {
+        Path file = Files.createFile(temp.resolve("invalid.gml"));
+
+        when(reader.read(file)).thenThrow(new IllegalStateException("invalid XML"));
+
+        assertThrows(IllegalStateException.class, () -> service.importGio(
+                new ImportRequest(file, "group", "regeling")));
+        verifyNoInteractions(regelingen, geometries, locations, objects);
     }
 
     @Test
