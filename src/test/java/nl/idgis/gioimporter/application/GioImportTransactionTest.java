@@ -34,16 +34,26 @@ class GioImportTransactionTest {
     Path temp;
 
     @Test
+    void commitsSuccessfulImport() throws Exception {
+        runImport(false, false, false);
+    }
+
+    @Test
     void rollsBackWhenFinalInsertFails() throws Exception {
-        runImport(true, false);
+        runImport(true, false, false);
     }
 
     @Test
     void rollsBackWhenFrbrExpressionAlreadyExists() throws Exception {
-        runImport(false, true);
+        runImport(false, true, false);
     }
 
-    private void runImport(boolean fail, boolean duplicate) throws Exception {
+    @Test
+    void rollsBackWhenLaterGeometryDiffers() throws Exception {
+        runImport(false, false, true);
+    }
+
+    private void runImport(boolean fail, boolean duplicate, boolean mismatch) throws Exception {
         DataSource ds = mock(DataSource.class);
         Connection connection = mock(Connection.class);
 
@@ -58,12 +68,22 @@ class GioImportTransactionTest {
 
         Clock clock = Clock.systemUTC();
         var identifiers = new ImowIdentifierGenerator(UUID::randomUUID);
-        var locationImporter = new LocationImportService(geometries, locations, identifiers, clock);
+        var locationImporter = new LocationImportService(
+                new GeometryImportService(geometries), locations, identifiers, clock);
         Path file = Files.createFile(temp.resolve("input.gml"));
         var location = new GioLocation("name", new GioGeometry("id", "gml"));
+        var second = new GioLocation("second", new GioGeometry("existing", "different-gml"));
         var gio = new Gio("work", "expression",
                 new GeographicContext(null, null, null),
-                List.of(location));
+                mismatch ? List.of(location, second) : List.of(location));
+
+        if (mismatch) {
+            when(geometries.findId("existing")).thenReturn(OptionalInt.of(11));
+            when(geometries.isEqual(11, second.geometry())).thenAnswer(call -> {
+                assertTrue(TransactionSynchronizationManager.isActualTransactionActive());
+                return false;
+            });
+        }
 
         when(reader.read(file)).thenAnswer(call -> {
             assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
@@ -105,7 +125,7 @@ class GioImportTransactionTest {
 
             var service = new GioImportService(reader, ctx.getBean(GioImportTransaction.class));
             var request = new ImportRequest(file, "group", "regeling");
-            if (duplicate) {
+            if (duplicate || mismatch) {
                 assertThrows(IllegalArgumentException.class, () -> service.importGio(request));
             } else if (fail) {
                 assertThrows(IllegalStateException.class, () -> service.importGio(request));
@@ -117,6 +137,13 @@ class GioImportTransactionTest {
             if (duplicate) {
                 verifyNoInteractions(regelingen, geometries, locations);
                 verifyNoMoreInteractions(objects);
+            } else if (mismatch) {
+                verify(geometries).insert("name", location.geometry());
+                verify(locations).insert(any());
+                verify(geometries).isEqual(11, second.geometry());
+                verify(locations, never()).insertGroup(any());
+                verify(locations, never()).linkToGroup(anyInt(), anyInt());
+                verify(objects, never()).insert(any());
             } else {
                 verify(locations).linkToGroup(20, 30);
                 verify(objects).insert(any());
@@ -124,7 +151,7 @@ class GioImportTransactionTest {
 
             var order = inOrder(connection);
             order.verify(connection).setAutoCommit(false);
-            if (fail || duplicate) {
+            if (fail || duplicate || mismatch) {
                 order.verify(connection).rollback();
                 verify(connection, never()).commit();
             } else {

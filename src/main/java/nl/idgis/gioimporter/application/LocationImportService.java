@@ -1,7 +1,6 @@
 package nl.idgis.gioimporter.application;
 
 import nl.idgis.gioimporter.application.model.NewLocation;
-import nl.idgis.gioimporter.application.port.GeometryRepository;
 import nl.idgis.gioimporter.application.port.LocationRepository;
 import nl.idgis.gioimporter.domain.GeometryType;
 import nl.idgis.gioimporter.domain.GioLocation;
@@ -9,16 +8,15 @@ import nl.idgis.gioimporter.domain.RegelingContext;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.OptionalInt;
 
 public final class LocationImportService {
 
-    private final GeometryRepository geometries;
+    private final GeometryImportService geometries;
     private final LocationRepository locations;
     private final ImowIdentifierGenerator identifiers;
     private final Clock clock;
 
-    public LocationImportService(GeometryRepository geometries, LocationRepository locations,
+    public LocationImportService(GeometryImportService geometries, LocationRepository locations,
                                  ImowIdentifierGenerator identifiers, Clock clock) {
         this.geometries = geometries;
         this.locations = locations;
@@ -27,16 +25,16 @@ public final class LocationImportService {
     }
 
     public int importLocation(GioLocation location, RegelingContext context) {
-        OptionalInt existing = geometries.findId(location.geometry().id());
-        if (existing.isPresent()) {
-            int id = locations.getId(existing.getAsInt(), context.regelingVersionId());
+        var geometry = geometries.importGeometry(location);
+        if (geometry.existing()) {
+            int id = locations.getId(geometry.id(), context.regelingVersionId());
             locations.updateName(id, location.name());
 
             return id;
         }
 
-        int geometryId = geometries.insert(location.name(), location.geometry());
-        GeometryType type = geometries.getType(geometryId);
+        int geometryId = geometry.id();
+        GeometryType type = geometry.type();
 
         return locations.insert(new NewLocation(location.name(), LocalDate.now(clock),
                 context.regelingId(), context.regelingVersionId(), type, geometryId,

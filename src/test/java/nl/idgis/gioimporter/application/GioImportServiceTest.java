@@ -37,7 +37,8 @@ class GioImportServiceTest {
     private final LocalDate date = LocalDate.of(2026, 11, 27);
     private final ImowIdentifierGenerator identifiers = new ImowIdentifierGenerator(
             () -> UUID.fromString("12345678-1234-1234-1234-123456789abc"));
-    private final LocationImportService locationImporter = new LocationImportService(geometries, locations, identifiers, clock);
+    private final LocationImportService locationImporter = new LocationImportService(
+            new GeometryImportService(geometries), locations, identifiers, clock);
     private final GioImportService service = new GioImportService(reader, new GioImportTransaction(regelingen,
             locationImporter, locations, objects, identifiers, clock));
     private final RegelingContext context = new RegelingContext(1, 2, 3, 4, "mnre1153");
@@ -63,6 +64,8 @@ class GioImportServiceTest {
         when(geometries.getType(10)).thenReturn(GeometryType.SURFACE);
         when(locations.insert(any(NewLocation.class))).thenReturn(20);
         when(geometries.findId("b")).thenReturn(OptionalInt.of(11));
+        when(geometries.isEqual(11, second.geometry())).thenReturn(true);
+        when(geometries.getType(11)).thenReturn(GeometryType.POINT);
         when(locations.getId(11, 2)).thenReturn(21);
         when(locations.getGeometryType(20)).thenReturn("vlak");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
@@ -79,6 +82,8 @@ class GioImportServiceTest {
         order.verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.SURFACE, 10,
                 "nl.imow-mnre1153.gebied.12345678123412341234123456789abc"));
         order.verify(geometries).findId("b");
+        order.verify(geometries).isEqual(11, second.geometry());
+        order.verify(geometries).getType(11);
         order.verify(locations).getId(11, 2);
         order.verify(locations).updateName(21, "second");
         order.verify(locations).getGeometryType(20);
@@ -95,6 +100,8 @@ class GioImportServiceTest {
         ImportRequest request = request(List.of(first));
 
         when(geometries.findId("a")).thenReturn(OptionalInt.of(10));
+        when(geometries.isEqual(10, first.geometry())).thenReturn(true);
+        when(geometries.getType(10)).thenReturn(GeometryType.POINT);
         when(locations.getId(10, 2)).thenReturn(20);
         when(locations.getGeometryType(20)).thenReturn("punt");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
@@ -111,6 +118,8 @@ class GioImportServiceTest {
         ImportRequest request = request(List.of(first));
 
         when(geometries.findId("a")).thenReturn(OptionalInt.of(10));
+        when(geometries.isEqual(10, first.geometry())).thenReturn(true);
+        when(geometries.getType(10)).thenReturn(GeometryType.POINT);
         when(locations.getId(10, 2)).thenThrow(new IllegalStateException("missing location"));
 
         assertThrows(IllegalStateException.class, () -> service.importGio(request));

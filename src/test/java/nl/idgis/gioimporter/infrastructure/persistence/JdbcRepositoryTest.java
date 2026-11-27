@@ -88,6 +88,23 @@ class JdbcRepositoryTest {
         verifyNoMoreInteractions(jdbc);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void comparesGeometrySpatially(boolean equal) {
+        String sql = """
+                SELECT ST_Equals(geometrie, ST_GeomFromGML(?, 28992))
+                FROM bzk.geometrie
+                WHERE id = ?
+                """;
+
+        when(jdbc.queryForObject(sql, Boolean.class, "gml", 42)).thenReturn(equal);
+
+        assertEquals(equal, new JdbcGeometryRepository(jdbc).isEqual(42,
+                new nl.idgis.gioimporter.domain.GioGeometry("id", "gml")));
+        verify(jdbc).queryForObject(sql, Boolean.class, "gml", 42);
+        verifyNoMoreInteractions(jdbc);
+    }
+
     @Test
     void bindsInformationObjectMetadata() throws Exception {
         var ps = mock(PreparedStatement.class);

@@ -31,6 +31,17 @@ public final class JdbcGeometryRepository implements GeometryRepository {
     }
 
     @Override
+    public boolean isEqual(int geometryId, GioGeometry geometry) {
+        String sql = """
+                SELECT ST_Equals(geometrie, ST_GeomFromGML(?, 28992))
+                FROM bzk.geometrie
+                WHERE id = ?
+                """;
+
+        return jdbcTemplate.queryForObject(sql, Boolean.class, geometry.gml(), geometryId);
+    }
+
+    @Override
     public int insert(String naam, GioGeometry geometry) {
         String gmlId = geometry.id();
         String gml = geometry.gml();

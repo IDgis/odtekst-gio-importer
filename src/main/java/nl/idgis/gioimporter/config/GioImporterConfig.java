@@ -78,9 +78,14 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public LocationImportService locationImportService(GeometryRepository geometryRepository,
+    public GeometryImportService geometryImportService(GeometryRepository geometryRepository) {
+        return new GeometryImportService(geometryRepository);
+    }
+
+    @Bean
+    public LocationImportService locationImportService(GeometryImportService geometryImporter,
             LocationRepository locationRepository, ImowIdentifierGenerator identifiers, Clock clock) {
-        return new LocationImportService(geometryRepository, locationRepository, identifiers, clock);
+        return new LocationImportService(geometryImporter, locationRepository, identifiers, clock);
     }
 
     @Bean
