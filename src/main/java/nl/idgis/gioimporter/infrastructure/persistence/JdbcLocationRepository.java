@@ -49,30 +49,6 @@ public final class JdbcLocationRepository implements LocationRepository {
     }
 
     @Override
-    public String getGeometryType(int locatieId) {
-        String sql = "SELECT geometrietype FROM bzk.locatie WHERE id = ?";
-        String errorMessage = "Kon het geometrietype van de locatie niet bepalen";
-
-        String geometryType = jdbcTemplate.query(
-                conn -> conn.prepareStatement(sql),
-                ps -> ps.setInt(1, locatieId),
-                rs -> {
-                    if (rs.next()) {
-                        return rs.getString("geometrietype");
-                    }
-
-                    throw new IllegalArgumentException(errorMessage);
-                }
-        );
-
-        if (geometryType == null) {
-            throw new IllegalArgumentException(errorMessage);
-        }
-
-        return geometryType;
-    }
-
-    @Override
     public void linkToGroup(int locatieId, int locatieGroepId) {
         String sql = "INSERT INTO bzk.groep_locatie (locatiegroep_id, locatie_id) VALUES (?, ?)";
 

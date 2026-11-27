@@ -83,16 +83,17 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public LocationImportService locationImportService(GeometryImportService geometryImporter,
-            LocationRepository locationRepository, ImowIdentifierGenerator identifiers, Clock clock) {
-        return new LocationImportService(geometryImporter, locationRepository, identifiers, clock);
+    public LocationImportService locationImportService(LocationRepository locationRepository,
+            ImowIdentifierGenerator identifiers, Clock clock) {
+        return new LocationImportService(locationRepository, identifiers, clock);
     }
 
     @Bean
     public GioImportTransaction gioImportTransaction(RegelingRepository regelingen,
-            LocationImportService locationImporter, LocationRepository locations,
-            InformationObjectRepository informationObjects, ImowIdentifierGenerator identifiers, Clock clock) {
-        return new GioImportTransaction(regelingen, locationImporter, locations,
+            GeometryImportService geometryImporter, LocationImportService locationImporter,
+            LocationRepository locations, InformationObjectRepository informationObjects,
+            ImowIdentifierGenerator identifiers, Clock clock) {
+        return new GioImportTransaction(regelingen, geometryImporter, locationImporter, locations,
                 informationObjects, identifiers, clock);
     }
 

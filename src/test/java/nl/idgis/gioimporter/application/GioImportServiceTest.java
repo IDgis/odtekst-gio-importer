@@ -7,6 +7,9 @@ import nl.idgis.gioimporter.application.port.*;
 import nl.idgis.gioimporter.domain.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,10 +40,9 @@ class GioImportServiceTest {
     private final LocalDate date = LocalDate.of(2026, 11, 27);
     private final ImowIdentifierGenerator identifiers = new ImowIdentifierGenerator(
             () -> UUID.fromString("12345678-1234-1234-1234-123456789abc"));
-    private final LocationImportService locationImporter = new LocationImportService(
-            new GeometryImportService(geometries), locations, identifiers, clock);
+    private final LocationImportService locationImporter = new LocationImportService(locations, identifiers, clock);
     private final GioImportService service = new GioImportService(reader, new GioImportTransaction(regelingen,
-            locationImporter, locations, objects, identifiers, clock));
+            new GeometryImportService(geometries), locationImporter, locations, objects, identifiers, clock));
     private final RegelingContext context = new RegelingContext(1, 2, 3, 4, "mnre1153");
     private final GioLocation first = new GioLocation("first", new GioGeometry("a", "gml-a"));
     private final GioLocation second = new GioLocation("second", new GioGeometry("b", "changed-gml"));
@@ -56,7 +58,7 @@ class GioImportServiceTest {
     }
 
     @Test
-    void importsNewAndExistingLocationsAndUsesFirstTypeForGroup() throws Exception {
+    void importsNewAndExistingLocationsWithUniformType() throws Exception {
         ImportRequest request = request(List.of(first, second));
 
         when(geometries.findId("a")).thenReturn(OptionalInt.empty());
@@ -65,9 +67,8 @@ class GioImportServiceTest {
         when(locations.insert(any(NewLocation.class))).thenReturn(20);
         when(geometries.findId("b")).thenReturn(OptionalInt.of(11));
         when(geometries.isEqual(11, second.geometry())).thenReturn(true);
-        when(geometries.getType(11)).thenReturn(GeometryType.POINT);
+        when(geometries.getType(11)).thenReturn(GeometryType.SURFACE);
         when(locations.findByGeometryId(11)).thenReturn(List.of(new StoredLocation(21, 1, 2)));
-        when(locations.getGeometryType(20)).thenReturn("vlak");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
 
         service.importGio(request);
@@ -79,20 +80,62 @@ class GioImportServiceTest {
         order.verify(geometries).findId("a");
         order.verify(geometries).insert("first", first.geometry());
         order.verify(geometries).getType(10);
-        order.verify(locations).findByGeometryId(10);
-        order.verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.SURFACE, 10,
-                "nl.imow-mnre1153.gebied.12345678123412341234123456789abc"));
         order.verify(geometries).findId("b");
         order.verify(geometries).isEqual(11, second.geometry());
         order.verify(geometries).getType(11);
+        order.verify(locations).findByGeometryId(10);
+        order.verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.SURFACE, 10,
+                "nl.imow-mnre1153.gebied.12345678123412341234123456789abc"));
         order.verify(locations).findByGeometryId(11);
-        order.verify(locations).getGeometryType(20);
         order.verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, "vlak",
                 "nl.imow-mnre1153.gebiedengroep.12345678123412341234123456789abc"));
         order.verify(locations).linkToGroup(20, 30);
         order.verify(locations).linkToGroup(21, 30);
         order.verify(objects).insert(new NewInformationObjectVersion("work", "expression", 1, 3, 4, "group", metadata, 30));
         verifyNoMoreInteractions(regelingen, reader, geometries, locations, objects);
+    }
+
+    @ParameterizedTest
+    @EnumSource(GeometryType.class)
+    void derivesGroupTypeFromUniformGeometries(GeometryType type) throws Exception {
+        ImportRequest request = request(List.of(first, second));
+
+        when(geometries.findId("a")).thenReturn(OptionalInt.of(10));
+        when(geometries.findId("b")).thenReturn(OptionalInt.of(11));
+        when(geometries.isEqual(10, first.geometry())).thenReturn(true);
+        when(geometries.isEqual(11, second.geometry())).thenReturn(true);
+        when(geometries.getType(10)).thenReturn(type);
+        when(geometries.getType(11)).thenReturn(type);
+        when(locations.findByGeometryId(10)).thenReturn(List.of(new StoredLocation(20, 1, 2)));
+        when(locations.findByGeometryId(11)).thenReturn(List.of(new StoredLocation(21, 1, 2)));
+        when(locations.insertGroup(any())).thenReturn(30);
+
+        service.importGio(request);
+
+        verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, type.databaseValue(),
+                "nl.imow-mnre1153." + type.imowObjectType() + "engroep.12345678123412341234123456789abc"));
+        verify(locations).linkToGroup(20, 30);
+        verify(locations).linkToGroup(21, 30);
+        verify(locations, never()).insert(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"POINT,LINE", "POINT,SURFACE", "LINE,SURFACE"})
+    void rejectsMixedCategoriesBeforeLocationProcessing(GeometryType firstType, GeometryType secondType) throws Exception {
+        ImportRequest request = request(List.of(first, second));
+
+        when(geometries.findId("a")).thenReturn(OptionalInt.empty());
+        when(geometries.findId("b")).thenReturn(OptionalInt.empty());
+        when(geometries.insert("first", first.geometry())).thenReturn(10);
+        when(geometries.insert("second", second.geometry())).thenReturn(11);
+        when(geometries.getType(10)).thenReturn(firstType);
+        when(geometries.getType(11)).thenReturn(secondType);
+
+        var error = assertThrows(IllegalArgumentException.class, () -> service.importGio(request));
+        assertEquals("Gemengde geometrietypen: verwacht " + firstType.databaseValue()
+                + ", gevonden " + secondType.databaseValue() + " bij basisgeo-ID b", error.getMessage());
+        verifyNoInteractions(locations);
+        verify(objects, never()).insert(any());
     }
 
     @Test
@@ -103,7 +146,6 @@ class GioImportServiceTest {
         when(geometries.isEqual(10, first.geometry())).thenReturn(true);
         when(geometries.getType(10)).thenReturn(GeometryType.POINT);
         when(locations.findByGeometryId(10)).thenReturn(List.of(new StoredLocation(20, 1, 99), new StoredLocation(19, 1, 98)));
-        when(locations.getGeometryType(20)).thenReturn("punt");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
         service.importGio(request);
 
@@ -123,7 +165,6 @@ class GioImportServiceTest {
         when(geometries.getType(10)).thenReturn(GeometryType.POINT);
         when(locations.findByGeometryId(10)).thenReturn(List.of());
         when(locations.insert(any())).thenReturn(20);
-        when(locations.getGeometryType(20)).thenReturn("punt");
         when(locations.insertGroup(any())).thenReturn(30);
 
         service.importGio(request);

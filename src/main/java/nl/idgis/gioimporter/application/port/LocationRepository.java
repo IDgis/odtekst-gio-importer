@@ -8,7 +8,6 @@ import java.util.List;
 
 public interface LocationRepository {
     List<StoredLocation> findByGeometryId(int geometryId);
-    String getGeometryType(int locationId);
     int insert(NewLocation location);
     int insertGroup(NewLocationGroup group);
     void linkToGroup(int locationId, int groupId);
