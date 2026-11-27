@@ -26,11 +26,17 @@ public final class LocationImportService {
 
     public int importLocation(GioLocation location, RegelingContext context) {
         var geometry = geometries.importGeometry(location);
-        if (geometry.existing()) {
-            int id = locations.getId(geometry.id(), context.regelingVersionId());
-            locations.updateName(id, location.name());
+        var existing = locations.findByGeometryId(geometry.id());
 
-            return id;
+        for (var stored : existing) {
+            if (stored.regelingId() != context.regelingId()) {
+                throw new IllegalArgumentException("Basisgeo-ID is al in gebruik bij een andere regeling: "
+                        + location.geometry().id() + ". Lever de geometrie aan met een nieuw basisgeo-ID");
+            }
+        }
+
+        if (!existing.isEmpty()) {
+            return existing.getFirst().id();
         }
 
         int geometryId = geometry.id();

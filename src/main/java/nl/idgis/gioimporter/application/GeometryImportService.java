@@ -26,6 +26,6 @@ public final class GeometryImportService {
             id = geometries.insert(location.name(), geometry);
         }
 
-        return new StoredGeometry(id, geometries.getType(id), existing.isPresent());
+        return new StoredGeometry(id, geometries.getType(id));
     }
 }

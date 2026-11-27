@@ -66,7 +66,7 @@ class GioImportServiceTest {
         when(geometries.findId("b")).thenReturn(OptionalInt.of(11));
         when(geometries.isEqual(11, second.geometry())).thenReturn(true);
         when(geometries.getType(11)).thenReturn(GeometryType.POINT);
-        when(locations.getId(11, 2)).thenReturn(21);
+        when(locations.findByGeometryId(11)).thenReturn(List.of(new StoredLocation(21, 1, 2)));
         when(locations.getGeometryType(20)).thenReturn("vlak");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
 
@@ -79,13 +79,13 @@ class GioImportServiceTest {
         order.verify(geometries).findId("a");
         order.verify(geometries).insert("first", first.geometry());
         order.verify(geometries).getType(10);
+        order.verify(locations).findByGeometryId(10);
         order.verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.SURFACE, 10,
                 "nl.imow-mnre1153.gebied.12345678123412341234123456789abc"));
         order.verify(geometries).findId("b");
         order.verify(geometries).isEqual(11, second.geometry());
         order.verify(geometries).getType(11);
-        order.verify(locations).getId(11, 2);
-        order.verify(locations).updateName(21, "second");
+        order.verify(locations).findByGeometryId(11);
         order.verify(locations).getGeometryType(20);
         order.verify(locations).insertGroup(new NewLocationGroup("group", date, 1, 2, "vlak",
                 "nl.imow-mnre1153.gebiedengroep.12345678123412341234123456789abc"));
@@ -102,7 +102,7 @@ class GioImportServiceTest {
         when(geometries.findId("a")).thenReturn(OptionalInt.of(10));
         when(geometries.isEqual(10, first.geometry())).thenReturn(true);
         when(geometries.getType(10)).thenReturn(GeometryType.POINT);
-        when(locations.getId(10, 2)).thenReturn(20);
+        when(locations.findByGeometryId(10)).thenReturn(List.of(new StoredLocation(20, 1, 99), new StoredLocation(19, 1, 98)));
         when(locations.getGeometryType(20)).thenReturn("punt");
         when(locations.insertGroup(any(NewLocationGroup.class))).thenReturn(30);
         service.importGio(request);
@@ -111,22 +111,28 @@ class GioImportServiceTest {
                 "nl.imow-mnre1153.puntengroep.12345678123412341234123456789abc"));
         verify(locations).linkToGroup(20, 30);
         verify(geometries, never()).insert(anyString(), any());
+        verify(locations, never()).insert(any());
     }
 
     @Test
-    void missingExistingLocationStopsImport() throws Exception {
+    void missingLocationForExistingGeometryIsCreated() throws Exception {
         ImportRequest request = request(List.of(first));
 
         when(geometries.findId("a")).thenReturn(OptionalInt.of(10));
         when(geometries.isEqual(10, first.geometry())).thenReturn(true);
         when(geometries.getType(10)).thenReturn(GeometryType.POINT);
-        when(locations.getId(10, 2)).thenThrow(new IllegalStateException("missing location"));
+        when(locations.findByGeometryId(10)).thenReturn(List.of());
+        when(locations.insert(any())).thenReturn(20);
+        when(locations.getGeometryType(20)).thenReturn("punt");
+        when(locations.insertGroup(any())).thenReturn(30);
 
-        assertThrows(IllegalStateException.class, () -> service.importGio(request));
-        verify(locations, never()).insert(any());
-        verify(locations, never()).insertGroup(any());
-        verify(objects).existsByFrbrExpression("expression");
-        verifyNoMoreInteractions(objects);
+        service.importGio(request);
+
+        verify(locations).insert(new NewLocation("first", date, 1, 2, GeometryType.POINT, 10,
+                "nl.imow-mnre1153.punt.12345678123412341234123456789abc"));
+        verify(locations).linkToGroup(20, 30);
+        verify(geometries, never()).insert(anyString(), any());
+        verify(objects).insert(any());
     }
 
     @Test

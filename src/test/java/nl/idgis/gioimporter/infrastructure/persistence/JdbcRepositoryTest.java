@@ -2,6 +2,7 @@ package nl.idgis.gioimporter.infrastructure.persistence;
 
 import nl.idgis.gioimporter.application.model.NewInformationObjectVersion;
 import nl.idgis.gioimporter.domain.GeographicContext;
+import nl.idgis.gioimporter.domain.StoredLocation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -13,6 +14,7 @@ import org.springframework.jdbc.core.ResultSetExtractor;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.List;
 import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +41,6 @@ class JdbcRepositoryTest {
 
         when(rs.next()).thenReturn(exists);
         when(rs.getInt("id")).thenReturn(42);
-
         when(jdbc.query(
                 eq("SELECT id FROM bzk.geometrie WHERE geometrie_id = ?"),
                 ArgumentMatchers.<ResultSetExtractor<OptionalInt>>any(), eq("basis-id")
@@ -54,6 +55,31 @@ class JdbcRepositoryTest {
                 eq("basis-id"));
 
         return result;
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void findsLocationsGloballyNewestFirst(int count) throws Exception {
+        var rs = mock(ResultSet.class);
+
+        when(rs.next()).thenReturn(count > 0, count > 1, false);
+        when(rs.getInt("id")).thenReturn(42, 41);
+        when(rs.getInt("regeling_id")).thenReturn(7, 9);
+        when(rs.getInt("regelingversie_id")).thenReturn(8, 6);
+
+        String sql = """
+                SELECT id, regeling_id, regelingversie_id
+                FROM bzk.locatie
+                WHERE geometrie_id = ?
+                ORDER BY datum_begin DESC, id DESC
+                """;
+
+        when(jdbc.query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(10)))
+                .thenAnswer(call -> call.<ResultSetExtractor<List<StoredLocation>>>getArgument(1).extractData(rs));
+
+        var expected = List.of(new StoredLocation(42, 7, 8), new StoredLocation(41, 9, 6)).subList(0, count);
+        assertEquals(expected, new JdbcLocationRepository(jdbc).findByGeometryId(10));
+        verify(jdbc).query(eq(sql), ArgumentMatchers.<ResultSetExtractor<List<StoredLocation>>>any(), eq(10));
     }
 
     @Test

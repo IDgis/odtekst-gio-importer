@@ -3,13 +3,17 @@ package nl.idgis.gioimporter.infrastructure.persistence;
 import nl.idgis.gioimporter.application.model.NewLocation;
 import nl.idgis.gioimporter.application.model.NewLocationGroup;
 import nl.idgis.gioimporter.application.port.LocationRepository;
+import nl.idgis.gioimporter.domain.StoredLocation;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public final class JdbcLocationRepository implements LocationRepository {
@@ -21,30 +25,27 @@ public final class JdbcLocationRepository implements LocationRepository {
     }
 
     @Override
-    public int getId(int geometryId, int regelingVersieId) {
-        String sql = "SELECT id FROM bzk.locatie WHERE geometrie_id = ? AND regelingversie_id = ?";
-        String errorMessage = "Kon de id van de locatie niet ophalen";
+    public List<StoredLocation> findByGeometryId(int geometryId) {
+        String sql = """
+                SELECT id, regeling_id, regelingversie_id
+                FROM bzk.locatie
+                WHERE geometrie_id = ?
+                ORDER BY datum_begin DESC, id DESC
+                """;
 
-        Integer id = jdbcTemplate.query(
-                conn -> conn.prepareStatement(sql),
-                ps -> {
-                    ps.setInt(1, geometryId);
-                    ps.setInt(2, regelingVersieId);
-                },
-                rs -> {
-                    if (rs.next()) {
-                        return rs.getInt("id");
-                    }
+        ResultSetExtractor<List<StoredLocation>> extractor = rs -> {
+            var locations = new ArrayList<StoredLocation>();
+            while (rs.next()) {
+                locations.add(new StoredLocation(
+                        rs.getInt("id"),
+                        rs.getInt("regeling_id"),
+                        rs.getInt("regelingversie_id")));
+            }
 
-                    throw new IllegalArgumentException(errorMessage);
-                }
-        );
+            return List.copyOf(locations);
+        };
 
-        if (id == null) {
-            throw new IllegalArgumentException(errorMessage);
-        }
-
-        return id;
+        return jdbcTemplate.query(sql, extractor, geometryId);
     }
 
     @Override
@@ -72,19 +73,6 @@ public final class JdbcLocationRepository implements LocationRepository {
     }
 
     @Override
-    public void updateName(int locatieId, String name) {
-        String sql = "UPDATE bzk.locatie SET naam = ? WHERE id = ?";
-
-        jdbcTemplate.update(conn -> {
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, name);
-            ps.setInt(2, locatieId);
-
-            return ps;
-        });
-    }
-
-    @Override
     public void linkToGroup(int locatieId, int locatieGroepId) {
         String sql = "INSERT INTO bzk.groep_locatie (locatiegroep_id, locatie_id) VALUES (?, ?)";
 
@@ -98,7 +86,7 @@ public final class JdbcLocationRepository implements LocationRepository {
     public int insert(NewLocation location) {
         String sql = """
                 INSERT INTO bzk.locatie (naam, datum_begin, ind_groep_jn, regeling_id, geometrietype, geometrie_id, identificatie, regelingversie_id)
-                VALUES (?, ?, false, ? ? ? ? ?)
+                VALUES (?, ?, false, ?, ?, ?, ?, ?)
                 RETURNING id
                 """;
         KeyHolder keyHolder = new GeneratedKeyHolder();
