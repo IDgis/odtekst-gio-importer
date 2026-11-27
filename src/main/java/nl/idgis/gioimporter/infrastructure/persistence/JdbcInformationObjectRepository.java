@@ -3,6 +3,7 @@ package nl.idgis.gioimporter.infrastructure.persistence;
 import nl.idgis.gioimporter.application.model.NewInformationObjectVersion;
 import nl.idgis.gioimporter.application.port.InformationObjectRepository;
 import nl.idgis.gioimporter.domain.GeographicContext;
+import nl.idgis.gioimporter.domain.Gio;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.Date;
@@ -22,8 +23,8 @@ public final class JdbcInformationObjectRepository implements InformationObjectR
                 INSERT INTO bzk.informatieobjectversie (frbr_work, frbr_expression, soort_work_id, regeling_id, eindverantwoordelijke_id, maker_id,
                 formaat_informatieobject_id, naam, officiele_titel, publicatie_instructie_id, stop_schema_versie, achtergrond_verwijzing,
                 achtergrond_actualiteit, nauwkeurigheid, locatie_id)
-                VALUES (?, ?, 2056, ?, ?, ?, 1410, ?, ?, 3, '1.3.0', ?, ?, ?, ?)
-                """;
+                VALUES (?, ?, 2056, ?, ?, ?, 1410, ?, ?, 3, '%s', ?, ?, ?, ?)
+                """.formatted(Gio.SUPPORTED_SCHEMA_VERSION);
 
         jdbcTemplate.update(sql, ps -> {
             ps.setObject(1, version.frbrWork());

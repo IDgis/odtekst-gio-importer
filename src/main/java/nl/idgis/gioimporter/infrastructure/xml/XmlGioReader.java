@@ -38,6 +38,14 @@ public final class XmlGioReader implements GioReader {
             dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
             dbf.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             Document doc = dbf.newDocumentBuilder().parse(path.toFile());
+
+            String schemaVersion = doc.getDocumentElement().getAttribute("schemaversie");
+            if (!Gio.SUPPORTED_SCHEMA_VERSION.equals(schemaVersion)) {
+                throw new IllegalArgumentException("Niet-ondersteunde STOP-schemaversie: "
+                        + (schemaVersion.isEmpty() ? "(ontbrekend of leeg)" : schemaVersion)
+                        + "; verwacht " + Gio.SUPPORTED_SCHEMA_VERSION);
+            }
+
             XPath xPath = new XPathBuilder()
                 .xmlns("basisgeo", "http://www.geostandaarden.nl/basisgeometrie/1.0")
                 .xmlns("geo", "https://standaarden.overheid.nl/stop/imop/geo/")

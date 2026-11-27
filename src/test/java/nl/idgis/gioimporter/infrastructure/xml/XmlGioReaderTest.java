@@ -2,6 +2,8 @@ package nl.idgis.gioimporter.infrastructure.xml;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
@@ -44,11 +46,17 @@ class XmlGioReaderTest {
     }
 
     @Test
-    void readAbsentOptionalMetadataAndAlternativePrefix() throws Exception {
+    void readsAbsentOptionalMetadataAndAlternativePrefix() throws Exception {
         var file = Files.writeString(temp.resolve("minimal.xml"), """
-            <x:root xmlns:x="https://standaarden.overheid.nl/stop/imop/geo/">
+            <x:GeoInformatieObjectVaststelling schemaversie="1.3.0"
+                xmlns:x="https://standaarden.overheid.nl/stop/imop/geo/"
+                xmlns:b="http://www.geostandaarden.nl/basisgeometrie/1.0"
+                xmlns:g="http://www.opengis.net/gml/3.2">
               <x:FRBRWork>work</x:FRBRWork><x:FRBRExpression>expression</x:FRBRExpression>
-            </x:root>
+              <x:Locatie><x:naam>Test</x:naam><b:id>id</b:id>
+                <b:geometrie><g:Point><g:pos>1 2</g:pos></g:Point></b:geometrie>
+              </x:Locatie>
+            </x:GeoInformatieObjectVaststelling>
             """);
         var gio = reader.read(file);
 
@@ -56,7 +64,39 @@ class XmlGioReaderTest {
         assertNull(gio.geographicContext().backgroundReference());
         assertNull(gio.geographicContext().backgroundActuality());
         assertNull(gio.geographicContext().accuracy());
-        assertTrue(gio.locations().isEmpty());
+        assertEquals(1, gio.locations().size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.2.0", "1.4.0", "", " 1.3.0 "})
+    void rejectsUnsupportedSchemaVersion(String version) throws Exception {
+        var file = Files.writeString(temp.resolve("version.xml"),
+                "<root schemaversie=\"" + version + "\"/>");
+
+        var error = assertThrows(IllegalArgumentException.class, () -> reader.read(file));
+        assertTrue(error.getMessage().contains("STOP-schemaversie"));
+    }
+
+    @Test
+    void rejectsMissingSchemaVersion() throws Exception {
+        var file = Files.writeString(temp.resolve("version.xml"), "<root/>");
+
+        var error = assertThrows(IllegalArgumentException.class, () -> reader.read(file));
+        assertTrue(error.getMessage().contains("STOP-schemaversie"));
+    }
+
+    @Test
+    void rejectsGioWithoutLocations() throws Exception {
+        var file = Files.writeString(temp.resolve("empty.xml"), """
+            <geo:GeoInformatieObjectVaststelling schemaversie="1.3.0"
+                xmlns:geo="https://standaarden.overheid.nl/stop/imop/geo/">
+              <geo:FRBRWork>work</geo:FRBRWork>
+              <geo:FRBRExpression>expression</geo:FRBRExpression>
+            </geo:GeoInformatieObjectVaststelling>
+            """);
+
+        var error = assertThrows(IllegalArgumentException.class, () -> reader.read(file));
+        assertTrue(error.getMessage().contains("minimaal één locatie"));
     }
 
     @Test
@@ -73,7 +113,7 @@ class XmlGioReaderTest {
 
     @Test
     void rejectsMissingRequiredElement() throws Exception {
-        var file = Files.writeString(temp.resolve("missing.xml"), "<root/>");
+        var file = Files.writeString(temp.resolve("missing.xml"), "<root schemaversie=\"1.3.0\"/>");
         assertThrows(IllegalArgumentException.class, () -> reader.read(file));
     }
 }

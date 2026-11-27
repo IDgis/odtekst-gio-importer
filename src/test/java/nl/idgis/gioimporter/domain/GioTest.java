@@ -25,13 +25,14 @@ class GioTest {
     void preservesLocationOrderAndDuplicates() {
         var a = new GioLocation("A", new GioGeometry("a", "gml"));
         var b = new GioLocation("B", new GioGeometry("b", "gml"));
-        var locations = List.of(a, b);
+        var locations = List.of(b, a, b);
 
         assertEquals(locations, new Gio("work", "expression", null, locations).locations());
     }
 
     @Test
-    void allowsEmptyLocationListWithoutNewValidation() {
-        assertTrue(new Gio("work", "expression", null, List.of()).locations().isEmpty());
+    void rejectsEmptyLocationList() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new Gio("work", "expression", null, List.of()));
     }
 }
