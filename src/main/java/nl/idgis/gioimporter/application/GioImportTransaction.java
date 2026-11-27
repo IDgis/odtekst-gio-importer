@@ -14,8 +14,12 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class GioImportTransaction {
+
+    private static final Logger LOGGER = Logger.getLogger(GioImportTransaction.class.getName());
 
     private final RegelingRepository regelingen;
     private final LocationImportService locationImporter;
@@ -43,19 +47,19 @@ public class GioImportTransaction {
         for (int i = 0; i < gio.locations().size(); i++) {
             GioLocation location = gio.locations().get(i);
 
-            System.out.printf("Bezig met verwerken van locatie '%s' (%d/%d)%n",
-                    location.name(), i + 1, gio.locations().size());
+            LOGGER.log(Level.INFO, "Bezig met verwerken van locatie ''{0}'' ({1}/{2})",
+                    new Object[] { location.name(), i + 1, gio.locations().size() });
             ids.add(locationImporter.importLocation(location, context));
         }
 
-        System.out.println("Bezig met het maken van de groepslocatie");
+        LOGGER.info("Bezig met het maken van de groepslocatie");
         String type = locations.getGeometryType(ids.getFirst());
         int groupId = locations.insertGroup(new NewLocationGroup(request.gioName(), LocalDate.now(clock),
                 context.regelingId(), context.regelingVersionId(), type,
                 identifiers.group(context.authorityCode(), type)));
         ids.forEach(id -> locations.linkToGroup(id, groupId));
 
-        System.out.println("Bezig met het verwerken van de GIO");
+        LOGGER.info("Bezig met het verwerken van de GIO");
         informationObjects.insert(new NewInformationObjectVersion(gio.frbrWork(), gio.frbrExpression(),
                 context.regelingId(), context.responsibleAuthorityId(), context.creatorId(), request.gioName(),
                 gio.geographicContext(), groupId));
