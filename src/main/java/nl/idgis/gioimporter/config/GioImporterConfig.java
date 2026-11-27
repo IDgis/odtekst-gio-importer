@@ -1,7 +1,10 @@
 package nl.idgis.gioimporter.config;
 
+import nl.idgis.gioimporter.application.GioImportService;
+import nl.idgis.gioimporter.application.ImowIdentifierGenerator;
+import nl.idgis.gioimporter.application.ImportRequest;
+import nl.idgis.gioimporter.application.LocationImportService;
 import nl.idgis.gioimporter.application.port.*;
-import nl.idgis.gioimporter.importer.GioImporter;
 import nl.idgis.gioimporter.infrastructure.persistence.JdbcGeometryRepository;
 import nl.idgis.gioimporter.infrastructure.persistence.JdbcInformationObjectRepository;
 import nl.idgis.gioimporter.infrastructure.persistence.JdbcLocationRepository;
@@ -15,6 +18,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.Objects;
+import java.util.UUID;
 
 @Configuration
 public class GioImporterConfig {
@@ -68,14 +75,35 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public GioImporter gioImporter(GioReader gioReader, RegelingRepository regelingRepository,
-                                   GeometryRepository geometryRepository, LocationRepository locationRepository,
-                                   InformationObjectRepository informationObjectRepository) {
-        String inputFile = environment.getProperty("input.file");
-        String gioName = environment.getProperty("gio.name");
-        String regelingExpression = environment.getProperty("regeling.expression");
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
 
-        return new GioImporter(gioReader, regelingRepository, geometryRepository, locationRepository,
-                informationObjectRepository, inputFile, gioName, regelingExpression);
+    @Bean
+    public ImowIdentifierGenerator imowIdentifierGenerator() {
+        return new ImowIdentifierGenerator(UUID::randomUUID);
+    }
+
+    @Bean
+    public ImportRequest importRequest() {
+        return new ImportRequest(
+                Path.of(Objects.requireNonNull(environment.getProperty("input.file"))),
+                environment.getProperty("gio.name"),
+                environment.getProperty("regeling.expression")
+        );
+    }
+
+    @Bean
+    public LocationImportService locationImportService(GeometryRepository geometryRepository,
+            LocationRepository locationRepository, ImowIdentifierGenerator identifiers, Clock clock) {
+        return new LocationImportService(geometryRepository, locationRepository, identifiers, clock);
+    }
+
+    @Bean
+    public GioImportService gioImportService(GioReader reader, RegelingRepository regelingen,
+            LocationImportService locationImporter, LocationRepository locations,
+            InformationObjectRepository informationObjects, ImowIdentifierGenerator identifiers, Clock clock) {
+        return new GioImportService(reader, regelingen, locationImporter, locations,
+                informationObjects, identifiers, clock);
     }
 }

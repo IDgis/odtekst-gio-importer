@@ -1,6 +1,7 @@
 package nl.idgis.gioimporter;
 
-import nl.idgis.gioimporter.importer.GioImporter;
+import nl.idgis.gioimporter.application.GioImportService;
+import nl.idgis.gioimporter.application.ImportRequest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
@@ -17,8 +18,8 @@ public class Main {
         try {
             ApplicationContext context = new AnnotationConfigApplicationContext(Main.class);
 
-            GioImporter gioImporter = context.getBean(GioImporter.class);
-            gioImporter.importGio();
+            GioImportService service = context.getBean(GioImportService.class);
+            service.importGio(context.getBean(ImportRequest.class));
         } catch (Exception e) {
             e.printStackTrace();
         }
