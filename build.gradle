@@ -1,29 +1,51 @@
 plugins {
-    id 'java'
-    id 'idea'
     id 'application'
+    id 'idea'
 }
 
-sourceCompatibility = 1.11
+group = 'nl.idgis.gioimporter'
+version = '1.0-SNAPSHOT'
 
-group 'nl.idgis'
-version '1.0-SNAPSHOT'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
 
-mainClassName = project.hasProperty("mainClass") ? project.hasProperty("mainClass") : "nl.idgis.gioimporter.Main"
-
-ext {
-    springVersion = "5.3.24"
-    postgresVersion = "42.3.3"
+application {
+    mainClass = providers.gradleProperty('mainClass').orElse('nl.idgis.gioimporter.Main')
 }
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    implementation("org.postgresql:postgresql:$postgresVersion")
+ext {
+    springVersion = '5.3.39'
+    postgresVersion = '42.3.3'
+    junitVersion = '5.13.4'
+    mockitoVersion = '5.20.0'
+}
 
-    implementation("org.springframework:spring-core:$springVersion")
-    implementation("org.springframework:spring-context:$springVersion")
-    implementation("org.springframework:spring-jdbc:$springVersion")
+configurations {
+    mockitoAgent
+}
+
+dependencies {
+    implementation "org.springframework:spring-context:${springVersion}"
+    implementation "org.springframework:spring-jdbc:${springVersion}"
+    runtimeOnly "org.postgresql:postgresql:${postgresVersion}"
+
+    testImplementation platform("org.junit:junit-bom:${junitVersion}")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+    mockitoAgent("org.mockito:mockito-core:${mockitoVersion}") {
+        transitive = false
+    }
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    jvmArgs "-javaagent:${configurations.mockitoAgent.singleFile.absolutePath}"
 }
