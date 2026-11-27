@@ -25,8 +25,15 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public final class XmlGioReader implements GioReader {
+
+    private static final Pattern FRBR_WORK = Pattern.compile(
+            "/join/id/regdata/mnre1153/[0-9]{4}(-[0-9]{2}-[0-9]{2})?/.+");
+    private static final Pattern EXPRESSION_SUFFIX = Pattern.compile(
+            "/nld@[0-9]{4}-[0-9]{2}-[0-9]{2}"
+    );
 
     @Override
     public Gio read(Path path) {
@@ -52,8 +59,19 @@ public final class XmlGioReader implements GioReader {
                 .xmlns("gio", "https://standaarden.overheid.nl/stop/imop/gio/")
                 .xmlns("gml", "http://www.opengis.net/gml/3.2")
                 .build();
-            NodeList nodes = (NodeList) xPath.evaluate("//geo:Locatie", doc, XPathConstants.NODESET);
 
+            String frbrWork = requiredNode(xPath, doc, "//geo:FRBRWork").getTextContent();
+            String frbrExpression = requiredNode(xPath, doc, "//geo:FRBRExpression").getTextContent();
+            if (!FRBR_WORK.matcher(frbrWork).matches()) {
+                throw new IllegalArgumentException("Ongeldige FRBRWork: " + frbrWork);
+            }
+            if (!frbrExpression.startsWith(frbrWork) ||
+                    !EXPRESSION_SUFFIX.matcher(frbrExpression.substring(frbrWork.length())).matches()) {
+                throw new IllegalArgumentException("Ongeldige FRBRExpression: " + frbrExpression +
+                        "; verwacht " + frbrWork + "/nld@YYYY-MM-DD");
+            }
+
+            NodeList nodes = (NodeList) xPath.evaluate("//geo:Locatie", doc, XPathConstants.NODESET);
             List<GioLocation> locations = new ArrayList<>();
             for (int i = 0; i < nodes.getLength(); i++) {
                 Node location = nodes.item(i);
@@ -69,8 +87,8 @@ public final class XmlGioReader implements GioReader {
             }
 
             return new Gio(
-                    requiredNode(xPath, doc, "//geo:FRBRWork").getTextContent(),
-                    requiredNode(xPath, doc, "//geo:FRBRExpression").getTextContent(),
+                    frbrWork,
+                    frbrExpression,
                     new GeographicContext(
                             optionalText(xPath, doc, "//gio:achtergrondVerwijzing"),
                             optionalText(xPath, doc, "//gio:achtergrondActualiteit"),

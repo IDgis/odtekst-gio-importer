@@ -52,7 +52,7 @@ class XmlGioReaderTest {
                 xmlns:x="https://standaarden.overheid.nl/stop/imop/geo/"
                 xmlns:b="http://www.geostandaarden.nl/basisgeometrie/1.0"
                 xmlns:g="http://www.opengis.net/gml/3.2">
-              <x:FRBRWork>work</x:FRBRWork><x:FRBRExpression>expression</x:FRBRExpression>
+              <x:FRBRWork>/join/id/regdata/mnre1153/2026/test</x:FRBRWork><x:FRBRExpression>/join/id/regdata/mnre1153/2026/test/nld@2026-11-05</x:FRBRExpression>
               <x:Locatie><x:naam>Test</x:naam><b:id>id</b:id>
                 <b:geometrie><g:Point><g:pos>1 2</g:pos></g:Point></b:geometrie>
               </x:Locatie>
@@ -60,7 +60,7 @@ class XmlGioReaderTest {
             """);
         var gio = reader.read(file);
 
-        assertEquals("work", gio.frbrWork());
+        assertEquals("/join/id/regdata/mnre1153/2026/test", gio.frbrWork());
         assertNull(gio.geographicContext().backgroundReference());
         assertNull(gio.geographicContext().backgroundActuality());
         assertNull(gio.geographicContext().accuracy());
@@ -90,13 +90,63 @@ class XmlGioReaderTest {
         var file = Files.writeString(temp.resolve("empty.xml"), """
             <geo:GeoInformatieObjectVaststelling schemaversie="1.3.0"
                 xmlns:geo="https://standaarden.overheid.nl/stop/imop/geo/">
-              <geo:FRBRWork>work</geo:FRBRWork>
-              <geo:FRBRExpression>expression</geo:FRBRExpression>
+              <geo:FRBRWork>/join/id/regdata/mnre1153/2026/test</geo:FRBRWork>
+              <geo:FRBRExpression>/join/id/regdata/mnre1153/2026/test/nld@2026-11-05</geo:FRBRExpression>
             </geo:GeoInformatieObjectVaststelling>
             """);
 
         var error = assertThrows(IllegalArgumentException.class, () -> reader.read(file));
         assertTrue(error.getMessage().contains("minimaal één locatie"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"2026/test", "2026-11-05/other", "2026/a.b+(c)", "2026-99-99/rest"})
+    void acceptsFrbrFormats(String tail) throws Exception {
+        String work = "/join/id/regdata/mnre1153/" + tail;
+        assertEquals(work, reader.read(frbrFile(work, work + "/nld@2026-99-99")).frbrWork());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/join/id/regdata/other/2026/test",
+            "/join/id/regdata/mnre1153/26/test", "/join/id/regdata/mnre1153/2026/",
+            "/join/id/regdata/mnre1153/2026-1-01/test"})
+    void rejectsInvalidFrbrWork(String work) throws Exception {
+        var file = frbrFile(work, work + "/nld@2026-11-05");
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> reader.read(file))
+                .getMessage().contains("FRBRWork"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/nld@2026", "/eng@2026-11-05", "/nld@2026-1-05",
+            "/nld@2026-11-05/extra"})
+    void rejectsInvalidExpressionSuffix(String suffix) throws Exception {
+        String work = "/join/id/regdata/mnre1153/2026/test";
+        var file = frbrFile(work, work + suffix);
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> reader.read(file))
+                .getMessage().contains("FRBRExpression"));
+    }
+
+    @Test
+    void rejectsDifferentWorkEvenWithRegexCharacters() throws Exception {
+        String work = "/join/id/regdata/mnre1153/2026/a.b";
+        var file = frbrFile(work, work.replace("a.b", "axb") + "/nld@2026-11-05");
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> reader.read(file))
+                .getMessage().contains("FRBRExpression"));
+    }
+
+    private Path frbrFile(String work, String expression) throws Exception {
+        return Files.writeString(temp.resolve("frbr.xml"), """
+            <geo:GeoInformatieObjectVaststelling schemaversie="1.3.0"
+                xmlns:geo="https://standaarden.overheid.nl/stop/imop/geo/"
+                xmlns:b="http://www.geostandaarden.nl/basisgeometrie/1.0"
+                xmlns:g="http://www.opengis.net/gml/3.2">
+              <geo:FRBRWork>%s</geo:FRBRWork>
+              <geo:FRBRExpression>%s</geo:FRBRExpression>
+              <geo:Locatie><geo:naam>Test</geo:naam><b:id>id</b:id>
+                <b:geometrie><g:Point><g:pos>1 2</g:pos></g:Point></b:geometrie>
+              </geo:Locatie>
+            </geo:GeoInformatieObjectVaststelling>
+            """.formatted(work, expression));
     }
 
     @Test
