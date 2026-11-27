@@ -1,7 +1,11 @@
 package nl.idgis.gioimporter.config;
 
-import nl.idgis.gioimporter.application.port.GioReader;
+import nl.idgis.gioimporter.application.port.*;
 import nl.idgis.gioimporter.importer.GioImporter;
+import nl.idgis.gioimporter.infrastructure.persistence.JdbcGeometryRepository;
+import nl.idgis.gioimporter.infrastructure.persistence.JdbcInformationObjectRepository;
+import nl.idgis.gioimporter.infrastructure.persistence.JdbcLocationRepository;
+import nl.idgis.gioimporter.infrastructure.persistence.JdbcRegelingRepository;
 import nl.idgis.gioimporter.infrastructure.xml.XmlGioReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -44,11 +48,34 @@ public class GioImporterConfig {
     }
 
     @Bean
-    public GioImporter gioImporter(JdbcTemplate jdbcTemplate, GioReader gioReader) {
+    public RegelingRepository regelingRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcRegelingRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public GeometryRepository geometryRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcGeometryRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public LocationRepository locationRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcLocationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public InformationObjectRepository informationObjectRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcInformationObjectRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public GioImporter gioImporter(GioReader gioReader, RegelingRepository regelingRepository,
+                                   GeometryRepository geometryRepository, LocationRepository locationRepository,
+                                   InformationObjectRepository informationObjectRepository) {
         String inputFile = environment.getProperty("input.file");
         String gioName = environment.getProperty("gio.name");
         String regelingExpression = environment.getProperty("regeling.expression");
 
-        return new GioImporter(jdbcTemplate, gioReader, inputFile, gioName, regelingExpression);
+        return new GioImporter(gioReader, regelingRepository, geometryRepository, locationRepository,
+                informationObjectRepository, inputFile, gioName, regelingExpression);
     }
 }
